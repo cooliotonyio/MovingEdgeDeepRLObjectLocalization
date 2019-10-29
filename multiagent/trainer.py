@@ -3,6 +3,28 @@ import tensorflow as tf
 
 from agents import DefaultAgent
 
+# Pseudocode
+'''
+init replay memory of agents
+init q-networks with rando weights
+for episode in 1,m:
+    initialize initial state
+    for t in 1,T:
+        select a_t via epsilon-greedy
+        get tranisition (s,a,r,s)
+        store transition in replay buffers
+        sample minibatch of transitions
+        gradient step
+        copy params to virtual agents
+        for j!=i:
+            do something idk
+        
+'''
+
+
+
+
+
 class RL_Trainer(object):
 
     def __init__(self, params = None):
