@@ -2,7 +2,7 @@ import numpy as np
 import time
 
 ###################################################
-# Everything below is stolen from cs285 hw verbatim
+# Everything below is stolen from cs285 hw 
 ###################################################
 
 def lrelu(x, leak=0.2):
@@ -18,21 +18,6 @@ def sample_trajectory(env, policy, max_path_length, render=False, render_mode=('
     obs, acs, rewards, next_obs, terminals, image_obs = [], [], [], [], [], []
     steps = 0
     while True:
-
-        # render image of the simulated env
-        if render:
-            if 'rgb_array' in render_mode:
-                if hasattr(env, 'sim'):
-                    if 'track' in env.env.model.camera_names:
-                        image_obs.append(env.sim.render(camera_name='track', height=500, width=500)[::-1])
-                    else:
-                        image_obs.append(env.sim.render(height=500, width=500)[::-1])
-                else:
-                    image_obs.append(env.render(mode=render_mode))
-            if 'human' in render_mode:
-                env.render(mode=render_mode)
-                time.sleep(env.model.opt.timestep)
-
         # use the most recent ob to decide what to do
         obs.append(ob)
         ac = policy.get_action(ob)
@@ -85,7 +70,6 @@ def Path(obs, image_obs, acs, rewards, next_obs, terminals):
             "action" : np.array(acs, dtype=np.float32),
             "next_observation": np.array(next_obs, dtype=np.float32),
             "terminal": np.array(terminals, dtype=np.float32)}
-
 
 def convert_listofrollouts(paths):
     """

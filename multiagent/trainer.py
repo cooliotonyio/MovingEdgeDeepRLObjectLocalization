@@ -1,8 +1,14 @@
+import numpy as np
+import tensorflow as tf
+
+from agents import DefaultAgent
+
 class RL_Trainer(object):
 
     def __init__(self, params = None):
         # TODO
         self.agent = None
+        self.params = params
 
     def run_training_loop(self, n_iter, collect_policy, eval_policy,
                         initial_expertdata=None, start_relabel_with_expert=1, expert_policy=None):
@@ -16,6 +22,7 @@ class RL_Trainer(object):
         """
 
     def collect_training_trajectories(self, itr):
+        pass
         # collect data to be used for training
 
     def train_agent(self):
