@@ -19,6 +19,10 @@ def get_area(bbox):
     return bbox[4] * bbox[3]
 
 def get_iou(bbox1, bbox2):
+    '''
+    Returns the IoU (Intersection over Union) of bbox1 and bbox2
+    iou(b1, b2) = area(intersection(b1, b2)) / area(union(b1, b2))
+    '''
     bb1_x1, bb1_y1, bb2_x1, bb2_y1 = bbox1[0], bbox1[1], bbox2[0], bbox2[1]
     bb1_x2, bb1_y2, bb2_x2, bb2_y2 = bb1_x1 + bbox1[2], bb1_y1 + bbox1[3], bb2_x1 + bbox2[2], bb2_y1 + bbox2[3]
 
@@ -34,7 +38,4 @@ def get_iou(bbox1, bbox2):
     
     iou = intersection_area / float(bb1_area + bb2_area - intersection_area)
 
-    # TODO: Remove assert statements
-    assert iou >= 0.0
-    assert iou <= 1.0
     return iou

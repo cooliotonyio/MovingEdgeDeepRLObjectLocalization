@@ -3,7 +3,6 @@ import tensorflow as tf
 
 class DefaultAgent():
     def __init__(self):
-        #TODO
         self.replay_buffer = None
 
     def train(self):

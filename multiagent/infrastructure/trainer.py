@@ -22,7 +22,7 @@ for episode in 1,m:
 class RL_Trainer(object):
 
     def __init__(self, params = None):
-        # TODO
+        # TODO: Adapt this class
         self.agent = None
         self.params = params
 
@@ -42,11 +42,4 @@ class RL_Trainer(object):
         # collect data to be used for training
 
     def train_agent(self):
-        print('\nTraining agent using sampled data from replay buffer...')
-        for train_step in range(self.params['num_agent_train_steps_per_iter']):
-
-            # TODO: sample some data from the data buffer
-            # TODO: use the sampled data for training
-            loss = self.agent.train(None)
-        
-        return loss
+        pass
