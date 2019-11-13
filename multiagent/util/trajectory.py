@@ -1,6 +1,4 @@
 import numpy as np
-import time
-
 ###################################################
 # Everything below is stolen from cs285 hw 
 ###################################################
@@ -9,6 +7,7 @@ def lrelu(x, leak=0.2):
     f1 = 0.5 * (1 + leak)
     f2 = 0.5 * (1 - leak)
     return f1 * x + f2 * abs(x)
+
 
 def sample_trajectory(env, policy, max_path_length, render=False, render_mode=('rgb_array')):
     # initialize env for the beginning of a new rollout

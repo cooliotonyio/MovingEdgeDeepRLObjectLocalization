@@ -1,8 +1,6 @@
 import numpy as np
 import tensorflow as tf
 
-from agents import DefaultAgent
-
 # Pseudocode
 '''
 init replay memory of agents
@@ -20,10 +18,6 @@ for episode in 1,m:
             do something idk
         
 '''
-
-
-
-
 
 class RL_Trainer(object):
 
