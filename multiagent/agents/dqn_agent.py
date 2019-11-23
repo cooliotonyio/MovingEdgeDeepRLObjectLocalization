@@ -2,15 +2,14 @@ import tensorflow as tf
 import numpy as np
 
 from multiagent.util.dqn_utils import MemoryOptimizedReplayBuffer, PiecewiseSchedule
-from cs285.policies.argmax_policy import ArgMaxPolicy
-from multiagent.critic.dqn_critic import DQNCritic
+from multiagent.policies.argmax_policy import ArgMaxPolicy
+from multiagent.critics.dqn_critic import DQNCritic
 
 class DQNAgent(object):
     #TODO: Adapt this class
-    def __init__(self, sess, env, agent_params):
+    def __init__(self, env, agent_params):
 
         self.env = env
-        self.sess = sess
         self.agent_params = agent_params
         self.batch_size = agent_params['batch_size']
         self.last_obs = self.env.reset()
@@ -24,12 +23,11 @@ class DQNAgent(object):
         self.exploration = agent_params['exploration_schedule']
         self.optimizer_spec = agent_params['optimizer_spec']
 
-        self.critic = DQNCritic(sess, agent_params, self.optimizer_spec)
-        self.actor = ArgMaxPolicy(sess, self.critic)
+        self.critic = DQNCritic(agent_params, agent_params['optimizer_spec'])
+        self.actor = ArgMaxPolicy(self.critic)
 
-        lander = agent_params['env_name'] == 'LunarLander-v2'
         self.replay_buffer = MemoryOptimizedReplayBuffer(
-            agent_params['replay_buffer_size'], agent_params['frame_history_len'], lander=lander)
+            agent_params['replay_buffer_size'], agent_params['frame_history_len'])
         self.t = 0
         self.num_param_updates = 0
 

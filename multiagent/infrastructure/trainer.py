@@ -31,14 +31,15 @@ class RL_Trainer(object):
         self.params = params
 
         seed = self.params["seed"]
-        tf.set_random_seed(seed)
+        tf.random.set_seed(seed)
         np.random.seed(seed)
 
         #############
         ## ENVIRONMENT
         #############
-        ob_dim = self.env.observation_space.shape if img else self.env.observation_space.shape[0]
-        ac_dim = self.env.action_space.n if discrete else self.env.action_space.shape[0]
+        self.env = self.params["env"]
+        ob_dim = 50 #TODO
+        ac_dim = self.env.get_ac_dim()
         self.params['agent_params']['ac_dim'] = ac_dim
         self.params['agent_params']['ob_dim'] = ob_dim
 
@@ -47,7 +48,7 @@ class RL_Trainer(object):
         ## AGENT
         #############
         agent_class = self.params['agent_class']
-        self.agent = agent_class(self.sess, self.env, self.params['agent_params'])
+        self.agent = agent_class(self.env, self.params['agent_params'])
 
 
 
