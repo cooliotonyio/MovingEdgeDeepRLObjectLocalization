@@ -4,10 +4,8 @@ from multiagent.util.dqn_utils import minimize_and_clip, huber_loss
 
 class DQNCritic(BaseCritic):
     #TODO: Adapt this class
-    def __init__(self, sess, hparams, optimizer_spec, **kwargs):
+    def __init__(self, hparams, optimizer_spec, **kwargs):
         super().__init__(**kwargs)
-        self.sess = sess
-        self.env_name = hparams['env_name']
         self.ob_dim = hparams['ob_dim']
 
         if isinstance(self.ob_dim, int):
@@ -97,17 +95,13 @@ class DQNCritic(BaseCritic):
     def define_placeholders(self):
         # set up placeholders
         # placeholder for current observation (or state)
-        lander = self.env_name == 'LunarLander-v2'
 
-        self.obs_t_ph = tf.placeholder(
-            tf.float32 if lander else tf.uint8, [None] + list(self.input_shape))
+        self.obs_t_ph = tf.placeholder(tf.uint8, [None] + list(self.input_shape))
         # placeholder for current action
         self.act_t_ph = tf.placeholder(tf.int32, [None])
-        # placeholder for current reward
         self.rew_t_ph = tf.placeholder(tf.float32, [None])
         # placeholder for next observation (or state)
-        self.obs_tp1_ph = tf.placeholder(
-            tf.float32 if lander else tf.uint8, [None] + list(self.input_shape))
+        self.obs_tp1_ph = tf.placeholder(tf.uint8, [None] + list(self.input_shape))
         # placeholder for end of episode mask
         # this value is 1 if the next state corresponds to the end of an episode,
         # in which case there is no Q-value at the next state; at the end of an

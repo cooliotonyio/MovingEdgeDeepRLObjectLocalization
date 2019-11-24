@@ -2,8 +2,7 @@ import tensorflow as tf
 
 class ArgMaxPolicy(object):
     # TODO: Adapt this class
-    def __init__(self, sess, critic):
-        self.sess = sess
+    def __init__(self, critic):
         self.critic = critic
 
         self.action = tf.argmax(self.critic.q_t_values, axis=1)

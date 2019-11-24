@@ -39,3 +39,6 @@ def get_iou(bbox1, bbox2):
     iou = intersection_area / float(bb1_area + bb2_area - intersection_area)
 
     return iou
+
+def bbox_to_corners(bbox):
+    return (bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3])

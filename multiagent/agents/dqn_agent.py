@@ -95,6 +95,7 @@ class DQNAgent(object):
         else:
             return [],[],[],[],[]
 
+
     def train(self, ob_no, ac_na, re_n, next_ob_no, terminal_n):
 
         """
