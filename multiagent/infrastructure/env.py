@@ -107,7 +107,8 @@ class ObjectLocalizationEnv():
         self.obs_feature = self.model(image)
         return self.obs_feature
 
-    def _positive_actions(self):
+    def _positive_actions_idx(self):
+        """Indexes of all positive actions"""
         positive_actions = []
         for i in range(len(self.actions)):
             new_bbox, _ = self._step(self.actions[i], self.obs_bbox)
@@ -118,9 +119,9 @@ class ObjectLocalizationEnv():
 
     def get_random_expert_action(self):
         """Returns random positive-reward action, else random action if none are postive"""
-        positive_actions = self._positive_actions()
-        if positive_actions:
-            action_idx = np.random.choice(positive_actions)
+        positive_actions_idx = self._positive_actions_idx()
+        if positive_actions_idx:
+            action_idx = np.random.choice(positive_actions_idx)
         else:
             action_idx = np.random.randint(len(self.actions))
         return self.actions[action_idx]
