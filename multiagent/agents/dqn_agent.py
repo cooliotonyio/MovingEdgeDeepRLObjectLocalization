@@ -10,12 +10,14 @@ import numpy as np
 
 class DQN_Model(Model):
     def __init__(self):
+        """Fully connected Neural Network that learns to approximate a q function"""
         super(DQN_Model, self).__init__()
         self.d1 = Dense(1024, activation = "relu")
         self.d2 = Dense(1024, activation = "relu")
         self.final = Dense(9, activation = "softmax")
     
     def call(self, x):
+        """Forward pass through neural network"""
         x = self.d1(x)
         x = self.d2(x)
         x = self.final(x)
@@ -23,6 +25,7 @@ class DQN_Model(Model):
     
 class DQN_Agent():
     def __init__(self, params, agent_params):
+        """Agent that uses a neural network to approximate a q function"""
         self.q_func = DQN_Model()
         self.t = 0
 
@@ -39,7 +42,7 @@ class DQN_Agent():
         self.train_loss_metric = agent_params["train_loss_metric"]
 
     def step(self, mode="train"):
-        """Epsilon-greedy step through env"""
+        """The agent takes one step through env. When in train mode, will use epsilon-greedy and increment self.t"""
 
         # Get obs
         obs = self.env.get_env_state()
@@ -62,6 +65,7 @@ class DQN_Agent():
 
     @tf.function
     def train(self, batch_size = None):
+        """Randomly samples 'batch_size' rollouts from self.replay_buffer and updates q_func via gradient descent"""
         if batch_size is None:
             batch_size = self.batch_size
 
@@ -81,9 +85,11 @@ class DQN_Agent():
         return total_loss
 
     def add_to_replay_buffer(self, rollouts):
+        """Adds rollouts to self.replay_buffer"""
         self.replay_buffer.add_rollouts(rollouts)
     
     def can_sample_replay_buffer(self, batch_size = None):
+        """Returns true if self.replay_buffer contains at least batch_size rollouts"""
         if batch_size is None:
             batch_size = self.batch_size
         return self.replay_buffer.can_sample(batch_size)

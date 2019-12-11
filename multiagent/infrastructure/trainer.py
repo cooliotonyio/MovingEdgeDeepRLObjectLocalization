@@ -24,6 +24,7 @@ class RL_Trainer(object):
         ac_dim = self.env.get_ac_dim()
         self.params['agent_params']['ac_dim'] = ac_dim
         self.params['agent_params']['ob_dim'] = ob_dim
+        self.max_path_length = self.params["max_path_length"]
 
         self.learning_freq = self.params['learning_freq']
 
@@ -38,9 +39,6 @@ class RL_Trainer(object):
         :param n_iter:  number of iterations
 
         # Pseudocode
-        '''
-        init replay memory of agents
-        init q-networks with rando weights
         for episode in 1,m:
             initialize initial state
             for t in 1,T:
@@ -53,35 +51,34 @@ class RL_Trainer(object):
                 for j!=i:
                     do something idk
                 
-        '''
 
         """
         self.start_time = time.time()
         self.total_envsteps = 0
-        #TODO: implement algorithm
-        rollouts = []
-        done = 0 
-
+        #TODO: make this work
+        
         for i in range(n_iter):
             print("\n\n********** Iteration %i ************"%i)
 
-            if done or i == 0:
-                self.env.reset()
-                if rollouts:
-                    self.agent.add_to_replay_buffer(rollouts)
-                    rollouts = []
+            self.env.reset()
 
-            # Run agent
-            obs, acs, rew, next_obs, done = self.agent.step(mode="train")
-            rollouts.append({
-                "obs": obs,
-                "acs": acs,
-                "rew": rew,
-                "next_obs": next_obs,
-                "done": done
-            })
-        
-            self.total_envsteps += 1
+            for step in range(max_path_length):
+                # Run agent
+                obs, acs, rew, next_obs, done = self.agent.step(mode="train")
+                rollouts.append({
+                    "obs": obs,
+                    "acs": acs,
+                    "rew": rew,
+                    "next_obs": next_obs,
+                    "done": done
+                })
+                self.total_envsteps += 1
+                if done:
+                    break
+
+            self.agent.add_to_replay_buffer(rollouts)
+            rollouts = []
+            done = False
 
             # Train agent (using sampled data from replay buffer)
             if i % self.learning_freq == 0 and self.agent.can_sample_replay_buffer():

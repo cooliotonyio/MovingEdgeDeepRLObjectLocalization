@@ -2,6 +2,8 @@ import os
 from tensorboardX import SummaryWriter
 import numpy as np
 
+#TODO: This file is unused
+
 class Logger:
     def __init__(self, log_dir, n_logged_samples=10, summary_writer=None):
         self._log_dir = log_dir

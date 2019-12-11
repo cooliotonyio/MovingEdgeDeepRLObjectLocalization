@@ -11,9 +11,7 @@ def huber_loss(x, delta=1.0):
 
 class ReplayBuffer(object):
     def __init__(self, size):
-        """
-        Replay buffer for agents
-        """
+        """Replay buffer for agents"""
         self.size = size
         self.num_in_buffer = 0
 
@@ -24,13 +22,11 @@ class ReplayBuffer(object):
         self.done = None
 
     def can_sample(self, batch_size):
-        can_sample = batch_size < self.num_in_buffer
-        return can_sample
+        """Returns true if buffer contains at least batch_size rollouts"""
+        return batch_size < self.num_in_buffer
 
     def add_rollouts(self, rollouts):
-        """
-        Add rollouts to memory buffer
-        """
+        """Add rollouts to memory buffer"""
         obs = np.concatenate([r["obs"] for r in rollouts])
         acs = np.concatenate([r["acs"] for r in rollouts])
         rew = [r["rew"] for r in rollouts]
@@ -55,11 +51,13 @@ class ReplayBuffer(object):
         self.num_in_buffer = self.obs.shape[0]
     
     def sample_random_data(self, batch_size):
+        """Samples batch_size rollouts randomly from buffer"""
+        assert self.can_sample(batch_size)
         rand_indices = np.random.permutation(self.num_in_buffer)[:batch_size]
-        print(rand_indices)
         return self.obs[rand_indices], self.acs[rand_indices], self.rew[rand_indices], self.next_obs[rand_indices], self.done[rand_indices]
 
     def reset(self):
+        """Clears out buffer"""
         self.num_in_buffer = 0
         self.obs = None
         self.acs = None
@@ -87,6 +85,6 @@ class LinearSchedule(object):
         self.initial_p          = initial_p
 
     def value(self, t):
-        """See Schedule.value"""
+        """Returns epsilon value based on t"""
         fraction  = min(float(t) / self.schedule_timesteps, 1.0)
         return self.initial_p + fraction * (self.final_p - self.initial_p)

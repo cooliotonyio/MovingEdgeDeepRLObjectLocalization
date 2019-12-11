@@ -1,9 +1,7 @@
 from PIL import ImageDraw
 
 def draw_bbox(img, bbox, width = 2, fill = "green"):
-    '''
-    Takes in PIL.Image, bbox info and draws bounding box
-    '''
+    """Takes in PIL.Image, bbox info and draws bounding box"""
     draw = ImageDraw.Draw(img)
     p1 = tuple(bbox[:2])
     p2 = (p1[0] + bbox[2], p1[1])
@@ -13,16 +11,14 @@ def draw_bbox(img, bbox, width = 2, fill = "green"):
     return img
 
 def get_area(bbox):
-    '''
-    Gets area of bbox
-    '''
+    """Gets area of bbox"""
     return bbox[2] * bbox[3]
 
 def get_iou(bbox1, bbox2):
-    '''
+    """
     Returns the IoU (Intersection over Union) of bbox1 and bbox2
     iou(b1, b2) = area(intersection(b1, b2)) / area(union(b1, b2))
-    '''
+    """
     bb1_x1, bb1_y1, bb2_x1, bb2_y1 = bbox1[0], bbox1[1], bbox2[0], bbox2[1]
     bb1_x2, bb1_y2, bb2_x2, bb2_y2 = bb1_x1 + bbox1[2], bb1_y1 + bbox1[3], bb2_x1 + bbox2[2], bb2_y1 + bbox2[3]
 
@@ -41,4 +37,5 @@ def get_iou(bbox1, bbox2):
     return iou
 
 def bbox_to_corners(bbox):
+    """Returns the top-left and bottom-right corners of a bbox"""
     return (bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3])
