@@ -20,11 +20,13 @@ class ObjectLocalizationEnv():
 
         self.model = model
         self.model_input_dim = model_input_dim
-        self.actions = np.arange(9)
         self.transformation_factor = transformation_factor
         self.trigger_threshold = trigger_threshold
         self.trigger_reward = trigger_reward
         self.history_len = history_len
+
+        self.actions = np.identity(9)
+
 
     def get_reward(self, old_bbox, action, new_bbox):
         """Returns reward, {-1,+1} for non-trigger actions, {-trigger_reward, +trigger_reward} for trigger action"""
@@ -52,64 +54,14 @@ class ObjectLocalizationEnv():
         if len(action.shape) == 2:
             action = action[0]
 
-        a_w = self.obs_bbox[2] * self.transformation_factor
-        a_h = self.obs_bbox[3] * self.transformation_factor
-
-        if a_w < 1:
-            a_w = 1
-        if a_h < 1:
-            a_h = 1
-        
-        done = tf.zeros((1,1))
         old_bbox = self.obs_bbox.copy()
-
-        if action[0]:
-            self.obs_bbox[0] = self.obs_bbox[0] + a_w
-        elif action[1]:
-            self.obs_bbox[0] = self.obs_bbox[0] - a_w
-        elif action[2]:
-            self.obs_bbox[1] = self.obs_bbox[1] + a_h
-        elif action[3]:
-            self.obs_bbox[1] = self.obs_bbox[1] - a_h
-        elif action[4]:
-            self.obs_bbox[0] = self.obs_bbox[0] - a_w
-            self.obs_bbox[1] = self.obs_bbox[1] - a_h
-            self.obs_bbox[2] = self.obs_bbox[2] + 2 * a_w
-            self.obs_bbox[3] = self.obs_bbox[3] + 2 * a_h
-        elif action[5]:
-            self.obs_bbox[0] = self.obs_bbox[0] + a_w
-            self.obs_bbox[1] = self.obs_bbox[1] + a_h
-            self.obs_bbox[2] = self.obs_bbox[2] - 2 * a_w
-            self.obs_bbox[3] = self.obs_bbox[3] - 2 * a_h
-        elif action[6]:
-            self.obs_bbox[1] = self.obs_bbox[1] + a_h
-            self.obs_bbox[3] = self.obs_bbox[3] - 2 * a_h
-        elif action[7]:
-            self.obs_bbox[0] = self.obs_bbox[0] + a_w
-            self.obs_bbox[2] = self.obs_bbox[2] - 2 * a_w
-        elif action[8]:
-            done = tf.ones((1,1))
-        
-        self.obs_bbox = [int(i) for i in np.rint(self.obs_bbox)]
-            
-        # Ensure obs_bbox is within bounds
-        if self.obs_bbox[0] < 0:
-            self.obs_bbox[0] = 0
-        if self.obs_bbox[1] < 0:
-            self.obs_bbox[1] = 0
-        if self.obs_bbox[2] < 1:
-            self.obs_bbox[2] = 1
-        if self.obs_bbox[3] < 1:
-            self.obs_bbox[3] = 1
-        if self.obs_bbox[0] + self.obs_bbox[2] > self.max_w:
-            self.obs_bbox[2] = self.max_w - self.obs_bbox[0]
-        if self.obs_bbox[1] + self.obs_bbox[3] > self.max_h:
-            self.obs_bbox[3] = self.max_h - self.obs_bbox[1]
+        self.obs_bbox, done = self._step(action, self.obs_bbox)
 
         self.history = tf.concat([
             self.history[1:], 
             tf.reshape(tf.cast(action, tf.float32), (1, len(self.actions)))], 
             axis=0)
+
         self._get_obs_feature()
 
         obs = self.get_env_state()
@@ -155,11 +107,79 @@ class ObjectLocalizationEnv():
         self.obs_feature = self.model(image)
         return self.obs_feature
 
+    def _positive_actions(self):
+        positive_actions = []
+        for i in range(len(self.actions)):
+            new_bbox, _ = self._step(self.actions[i], self.obs_bbox)
+            if self._reward(self.obs_bbox, self.actions[i], new_bbox) > 0:
+                positive_actions.append(i)
+        return positive_actions
+
+
     def get_random_expert_action(self):
-        """Returns random positive-reward action"""
+        """Returns random positive-reward action, else random action if none are postive"""
+        positive_actions = self._positive_actions()
+        if positive_actions:
+            action_idx = np.random.choice(positive_actions)
+        else:
+            action_idx = np.random.randint(len(self.actions))
+        return self.actions[action_idx]
+
+    def _step(self, action, bbox):
+        bbox = bbox.copy()
+
+        a_w = bbox[2] * self.transformation_factor
+        a_h = bbox[3] * self.transformation_factor
+
+        if a_w < 1:
+            a_w = 1
+        if a_h < 1:
+            a_h = 1
         
-        #TODO: make this return random POSITIVE action instead of just a random action
-        a = np.random.randint(9)
-        action = np.zeros(len(self.actions))
-        np.put(action,a,1)
-        return action
+        done = tf.zeros((1,1))
+        old_bbox = bbox.copy()
+
+        if action[0]:
+            bbox[0] = bbox[0] + a_w
+        elif action[1]:
+            bbox[0] = bbox[0] - a_w
+        elif action[2]:
+            bbox[1] = bbox[1] + a_h
+        elif action[3]:
+            bbox[1] = bbox[1] - a_h
+        elif action[4]:
+            bbox[0] = bbox[0] - a_w
+            bbox[1] = bbox[1] - a_h
+            bbox[2] = bbox[2] + 2 * a_w
+            bbox[3] = bbox[3] + 2 * a_h
+        elif action[5]:
+            bbox[0] = bbox[0] + a_w
+            bbox[1] = bbox[1] + a_h
+            bbox[2] = bbox[2] - 2 * a_w
+            bbox[3] = bbox[3] - 2 * a_h
+        elif action[6]:
+            bbox[1] = bbox[1] + a_h
+            bbox[3] = bbox[3] - 2 * a_h
+        elif action[7]:
+            bbox[0] = bbox[0] + a_w
+            bbox[2] = bbox[2] - 2 * a_w
+        elif action[8]:
+            done = tf.ones((1,1))
+        
+        bbox = [int(i) for i in np.rint(bbox)]
+            
+        # Ensure obs_bbox is within bounds
+        if bbox[0] < 0:
+            bbox[0] = 0
+        if bbox[1] < 0:
+            bbox[1] = 0
+        if bbox[2] < 1:
+            bbox[2] = 1
+        if bbox[3] < 1:
+            bbox[3] = 1
+        if bbox[0] + bbox[2] > self.max_w:
+            bbox[2] = self.max_w - bbox[0]
+        if bbox[1] + bbox[3] > self.max_h:
+            bbox[3] = self.max_h - bbox[1]
+
+        return bbox, done
