@@ -16,7 +16,7 @@ def get_area(bbox):
     '''
     Gets area of bbox
     '''
-    return bbox[4] * bbox[3]
+    return bbox[2] * bbox[3]
 
 def get_iou(bbox1, bbox2):
     '''

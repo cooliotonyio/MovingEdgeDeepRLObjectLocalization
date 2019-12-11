@@ -23,35 +23,49 @@ class ReplayBuffer(object):
         self.next_obs = None
         self.done = None
 
+    def can_sample(self, batch_size):
+        can_sample = batch_size < self.num_in_buffer
+        return can_sample
+
     def add_rollouts(self, rollouts):
         """
         Add rollouts to memory buffer
         """
-        obs = np.concatenate(r["obs"] for r in rollouts)
-        acs = np.concatenate(r["acs"] for r in rollouts)
-        rew = np.concatenate(r["rew"] for r in rollouts)
-        next_obs = np.concatenate(r["next_obs"] for r in rollouts)
-        done = np.concatenate(r["done"] for r in rollouts)
+        obs = np.concatenate([r["obs"] for r in rollouts])
+        acs = np.concatenate([r["acs"] for r in rollouts])
+        rew = [r["rew"] for r in rollouts]
+        next_obs = np.concatenate([r["next_obs"] for r in rollouts])
+        done = [r["done"] for r in rollouts]
 
         if self.obs is None:
             self.obs = obs[-self.size:]
             self.acs = acs[-self.size:]
-            self.rew = req[-self.size:]
+            self.rew = rew[-self.size:]
             self.next_obs = next_obs[-self.size:]
             self.done = done[-self.size:]
         else:
             self.obs = np.concatenate([self.obs, obs])[-self.size:]
             self.acs = np.concatenate([self.acs, acs])[-self.size:]
-            self.rew = np.concatenate([self.rew, rew])[-self.size:]
+            self.rew = (self.rew + rew)[-self.size:]
             self.next_obs = np.concatenate([self.next_obs, next_obs])[-self.size:]
-            self.done = np.concatenate([self.done, done])[-self.size:]
+            self.done = (self.done + done)[-self.size:]
 
-        assert self.obs.shape[0] == self.acs.shape[0] == self.rew.shape[0] == self.next_obs.shape[0] == self.done.shape[0]
+        assert self.obs.shape[0] == self.acs.shape[0] == len(self.rew) == self.next_obs.shape[0] == len(self.done)
+
         self.num_in_buffer = self.obs.shape[0]
     
     def sample_random_data(self, batch_size):
         rand_indices = np.random.permutation(self.num_in_buffer)[:batch_size]
+        print(rand_indices)
         return self.obs[rand_indices], self.acs[rand_indices], self.rew[rand_indices], self.next_obs[rand_indices], self.done[rand_indices]
+
+    def reset(self):
+        self.num_in_buffer = 0
+        self.obs = None
+        self.acs = None
+        self.rew = None
+        self.next_obs = None
+        self.done = None
 
 class LinearSchedule(object):
     def __init__(self, schedule_timesteps, final_p, initial_p=1.0):

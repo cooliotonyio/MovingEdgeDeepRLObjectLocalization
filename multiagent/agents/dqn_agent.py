@@ -10,7 +10,7 @@ import numpy as np
 
 class DQN_Model(Model):
     def __init__(self):
-        super(DQN_Agent, self).__init__()
+        super(DQN_Model, self).__init__()
         self.d1 = Dense(1024, activation = "relu")
         self.d2 = Dense(1024, activation = "relu")
         self.final = Dense(9, activation = "softmax")
@@ -29,8 +29,8 @@ class DQN_Agent():
         self.optimizer = params["optimizer"]
         self.loss = params["loss"]
         self.env = params["env"]
+        self.ac_dim = self.env.get_ac_dim()
 
-        self.learning_freq = agent_params["learning_freq"]
         self.gamma = agent_params["gamma"]
         self.epsilon = agent_params["epsilon"]
         self.batch_size = agent_params["batch_size"]
@@ -38,34 +38,37 @@ class DQN_Agent():
 
         self.train_loss_metric = agent_params["train_loss_metric"]
 
-    @tf.function
     def step(self, mode="train"):
-        """Epsilon-greedy step that gets added to replay buffer"""
-        if mode == "train" and np.random.random() < self.epsilon(self.t):
-            acn = self.env.get_random_expert_action()
+        """Epsilon-greedy step through env"""
+
+        # Get obs
+        obs = self.env.get_env_state()
+
+        # epsilon-greedy
+        if mode == "train" and np.random.random() < self.epsilon.value(self.t):
+            acs = self.env.get_random_expert_action()
             self.t += 1
         else:
-            # Get obs and calculate q_vals
-            obs = self.env.get_obs()
             q_vals = self.q_func.call(obs)
+            acs = tf.one_hot(tf.math.argmax(q_vals, axis=1), self.ac_dim)
 
-            # Select an action (based on arg_max)
-            action = tf.math.arg_max(q_vals, axis=1)
-            
-            # Execute action
-            next_obs, rew, done = self.env.step(acn)
-            
-            if mode == "train":
-                self.t += 1
+        # Execute action
+        next_obs, rew, done = self.env.step(acs)
+        acs = tf.reshape(acs, (1, self.ac_dim))
+        if mode == "train":
+            self.t += 1
         
         return obs, acs, rew, next_obs, done
 
     @tf.function
-    def train(batch_size = self.batch_size)
+    def train(self, batch_size = None):
+        if batch_size is None:
+            batch_size = self.batch_size
+
         obs, acs, rew, next_obs, done = self.replay_buffer.sample_random_data(batch_size)
 
         with tf.GradientTape() as tape:
-            pred_q_val = tf.reduce_sum(self.q_func.call(obs) * tf.one_hot(acs, self.ac_dim), axis = 1)
+            pred_q_val = tf.reduce_sum(self.q_func.call(obs) * acs, axis = 1)
             next_q_val = tf.math.reduce_max(self.q_func.call(next_obs), axis = 1)
             target_q_val = rew + (tf.ones(done.shape) - done) * (self.gamma * next_q_val)
 
@@ -77,4 +80,10 @@ class DQN_Agent():
         self.train_loss_metric(total_loss)
         return total_loss
 
+    def add_to_replay_buffer(self, rollouts):
+        self.replay_buffer.add_rollouts(rollouts)
     
+    def can_sample_replay_buffer(self, batch_size = None):
+        if batch_size is None:
+            batch_size = self.batch_size
+        return self.replay_buffer.can_sample(batch_size)

@@ -25,22 +25,17 @@ class RL_Trainer(object):
         self.params['agent_params']['ac_dim'] = ac_dim
         self.params['agent_params']['ob_dim'] = ob_dim
 
+        self.learning_freq = self.params['learning_freq']
 
         #############
         ## AGENT
         #############
         agent_class = self.params['agent_class']
-        self.agent = agent_class(self.env, self.params['agent_params'])
+        self.agent = agent_class(self.params, self.params['agent_params'])
 
-    def run_training_loop(self, n_iter, collect_policy, eval_policy,
-                        initial_expertdata=None, start_relabel_with_expert=1, expert_policy=None):
+    def run_training_loop(self, n_iter):
         """
         :param n_iter:  number of iterations
-        :param collect_policy:
-        :param eval_policy:
-        :param initial_expertdata:
-        :param start_relabel_with_expert: iteration at which to start relabel with expert
-        :param expert_policy:
 
         # Pseudocode
         '''
@@ -64,23 +59,32 @@ class RL_Trainer(object):
         self.start_time = time.time()
         self.total_envsteps = 0
         #TODO: implement algorithm
+        rollouts = []
+        done = 0 
 
-        for iter in range(n_iter):
-            print("\n\n********** Iteration %i ************"%itr)
+        for i in range(n_iter):
+            print("\n\n********** Iteration %i ************"%i)
+
+            if done or i == 0:
+                self.env.reset()
+                if rollouts:
+                    self.agent.add_to_replay_buffer(rollouts)
+                    rollouts = []
 
             # Run agent
-            self.agent.train_step()
+            obs, acs, rew, next_obs, done = self.agent.step(mode="train")
+            rollouts.append({
+                "obs": obs,
+                "acs": acs,
+                "rew": rew,
+                "next_obs": next_obs,
+                "done": done
+            })
+        
             self.total_envsteps += 1
 
             # Train agent (using sampled data from replay buffer)
-            losses = self.train_agent()
-
-            # log/save
-            if self.params['scalar_log_freq'] == -1:
-                self.logmetrics = False
-            elif itr % self.params['scalar_log_freq'] == 0:
-                self.logmetrics = True
-            else:
-                self.logmetrics = False
-
-    def train_agent():
+            if i % self.learning_freq == 0 and self.agent.can_sample_replay_buffer():
+                loss = self.agent.train()
+                print("ITER: {} \t TIME: {} \t LOSS: {}".format(i, time.time() - self.start_time, loss))
+                
