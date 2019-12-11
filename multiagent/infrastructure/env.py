@@ -28,12 +28,14 @@ class ObjectLocalizationEnv():
 
     def get_reward(self, old_bbox, action, new_bbox):
         """Returns reward, {-1,+1} for non-trigger actions, {-trigger_reward, +trigger_reward} for trigger action"""
-        return tf.cast(tf.reshape(self._reward(old_bbox, action, new_bbox), (1,1)), tf.float32)
+        return tf.reshape(tf.cast(self._reward(old_bbox, action, new_bbox), tf.float32), (1,1))
         
     def _reward(self, old_bbox, action, new_bbox):
         # non-trigger action reward
         if not action[8]:
-            return int(get_iou(new_bbox, self.target_bbox) > get_iou(old_bbox,self.target_bbox))
+            if get_iou(new_bbox, self.target_bbox) > get_iou(old_bbox,self.target_bbox):
+                return 1
+            return -1
         
         # trigger action reward
         assert old_bbox == new_bbox

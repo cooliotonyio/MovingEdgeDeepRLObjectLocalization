@@ -56,13 +56,15 @@ class RL_Trainer(object):
         self.start_time = time.time()
         self.total_envsteps = 0
         #TODO: make this work
-        
+
         for i in range(n_iter):
             print("\n\n********** Iteration %i ************"%i)
 
             self.env.reset()
+            rollouts = []
+            done = False
 
-            for step in range(max_path_length):
+            for step in range(self.max_path_length):
                 # Run agent
                 obs, acs, rew, next_obs, done = self.agent.step(mode="train")
                 rollouts.append({
@@ -77,8 +79,6 @@ class RL_Trainer(object):
                     break
 
             self.agent.add_to_replay_buffer(rollouts)
-            rollouts = []
-            done = False
 
             # Train agent (using sampled data from replay buffer)
             if i % self.learning_freq == 0 and self.agent.can_sample_replay_buffer():
