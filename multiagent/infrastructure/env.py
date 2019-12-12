@@ -13,7 +13,8 @@ class ObjectLocalizationEnv():
         transformation_factor = 0.2, 
         trigger_threshold = 0.6, 
         trigger_reward = 3,
-        history_len = 10):
+        history_len = 10,
+        feature_dim = 4096):
         """
         Environment in which the agent acts in
         """
@@ -24,13 +25,14 @@ class ObjectLocalizationEnv():
         self.trigger_threshold = trigger_threshold
         self.trigger_reward = trigger_reward
         self.history_len = history_len
+        self.feature_dim = feature_dim
 
         self.actions = np.identity(9)
 
 
     def get_reward(self, old_bbox, action, new_bbox):
         """Returns reward, {-1,+1} for non-trigger actions, {-trigger_reward, +trigger_reward} for trigger action"""
-        return tf.reshape(tf.cast(self._reward(old_bbox, action, new_bbox), tf.float32), (1,1))
+        return tf.reshape(tf.cast(self._reward(old_bbox, action, new_bbox), tf.float32), (1,))
         
     def _reward(self, old_bbox, action, new_bbox):
         # non-trigger action reward
@@ -49,7 +51,16 @@ class ObjectLocalizationEnv():
         """
         Takes one step through the environment. Returns next_state, reward, and if the episode has terminated
 
-        Actions: [right, left, up, down, bigger, smaller, fatter, taller, trigger]
+        Actions: [
+            0:right, 
+            1:left, 
+            2:up, 
+            3:down, 
+            4:bigger, 
+            5:smaller, 
+            6:fatter, 
+            7:taller, 
+            8:trigger]
         """
         if len(action.shape) == 2:
             action = action[0]
@@ -63,6 +74,7 @@ class ObjectLocalizationEnv():
             axis=0)
 
         self._get_obs_feature()
+        self._get_history_vector()
 
         obs = self.get_env_state()
         rew = self.get_reward(old_bbox, action, self.obs_bbox)
@@ -80,12 +92,11 @@ class ObjectLocalizationEnv():
         _, self.max_h, self.max_w, _ = self.image.shape
         self.obs_bbox = [0, 0, self.max_w, self.max_h] 
         self.obs_feature = self._get_obs_feature()
+        self.history_vector = self._get_history_vector()
 
     def get_env_state(self):
         """The extracted feature vector of the bbox concatenated with history vector of actions"""
-        return tf.concat(
-            [self.obs_feature, tf.reshape(self.history, (1, self.history_len * len(self.actions)))], 
-            axis = 1)
+        return tf.concat((self.obs_feature, self.history_vector), axis=0)
     
     def show(self):
         """Draws both target bbox and current bbox in the image"""
@@ -104,8 +115,12 @@ class ObjectLocalizationEnv():
         """Extracts feature vector from current bbox"""
         image = tf.image.crop_to_bounding_box(self.image, self.obs_bbox[1], self.obs_bbox[0], self.obs_bbox[3], self.obs_bbox[2])
         image = preprocess_input(tf.image.resize(image, self.model_input_dim), mode="tf")
-        self.obs_feature = self.model(image)
+        self.obs_feature = tf.reshape(self.model(image), (self.feature_dim, ))
         return self.obs_feature
+
+    def _get_history_vector(self):
+        self.history_vector = tf.reshape(self.history, (self.history_len * len(self.actions),))
+        return self.history_vector
 
     def _positive_actions_idx(self):
         """Indexes of all positive actions"""
@@ -137,7 +152,7 @@ class ObjectLocalizationEnv():
         if a_h < 1:
             a_h = 1
         
-        done = tf.zeros((1,1))
+        done = tf.zeros((1,))
         old_bbox = bbox.copy()
 
         if action[0]:
@@ -165,7 +180,7 @@ class ObjectLocalizationEnv():
             bbox[0] = bbox[0] + a_w
             bbox[2] = bbox[2] - 2 * a_w
         elif action[8]:
-            done = tf.ones((1,1))
+            done = tf.ones((1,))
         
         bbox = [int(i) for i in np.rint(bbox)]
             

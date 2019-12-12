@@ -27,11 +27,11 @@ class ReplayBuffer(object):
 
     def add_rollouts(self, rollouts):
         """Add rollouts to memory buffer"""
-        obs = np.concatenate([r["obs"] for r in rollouts], axis = 0)
-        acs = np.concatenate([r["acs"] for r in rollouts], axis = 0)
-        rew = np.concatenate([r["rew"] for r in rollouts], axis = 0)
-        next_obs = np.concatenate([r["next_obs"] for r in rollouts], axis = 0)
-        done = np.concatenate([r["done"] for r in rollouts], axis = 0)
+        obs = np.stack([r["obs"] for r in rollouts], axis=0)
+        acs = np.stack([r["acs"] for r in rollouts], axis=0)
+        rew = np.stack([r["rew"] for r in rollouts], axis=0)
+        next_obs = np.stack([r["next_obs"] for r in rollouts], axis=0)
+        done = np.stack([r["done"] for r in rollouts], axis=0)
 
         if self.obs is None:
             self.obs = obs[-self.size:]
@@ -40,13 +40,13 @@ class ReplayBuffer(object):
             self.next_obs = next_obs[-self.size:]
             self.done = done[-self.size:]
         else:
-            self.obs = np.concatenate([self.obs, obs], axis = 0)[-self.size:]
-            self.acs = np.concatenate([self.acs, acs], axis = 0)[-self.size:]
-            self.rew = np.concatenate([self.rew, rew], axis = 0)[-self.size:]
-            self.next_obs = np.concatenate([self.next_obs, next_obs], axis = 0)[-self.size:]
-            self.done = np.concatenate([self.done, done], axis = 0)[-self.size:]
+            self.obs = np.concatenate([self.obs, obs], axis=0)[-self.size:]
+            self.acs = np.concatenate([self.acs, acs], axis=0)[-self.size:]
+            self.rew = np.concatenate([self.rew, rew], axis=0)[-self.size:]
+            self.next_obs = np.concatenate([self.next_obs, next_obs], axis=0)[-self.size:]
+            self.done = np.concatenate([self.done, done], axis=0)[-self.size:]
 
-        assert self.obs.shape[0] == self.acs.shape[0] == len(self.rew) == self.next_obs.shape[0] == len(self.done)
+        assert self.obs.shape[0] == self.acs.shape[0] == self.rew.shape[0] == self.next_obs.shape[0] == self.done.shape[0]
 
         self.num_in_buffer = self.obs.shape[0]
 
