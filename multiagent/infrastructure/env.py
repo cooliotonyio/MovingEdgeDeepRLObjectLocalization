@@ -42,7 +42,6 @@ class ObjectLocalizationEnv():
             return -1
         
         # trigger action reward
-        assert old_bbox == new_bbox
         if get_iou(new_bbox, self.target_bbox) > self.trigger_threshold:
             return self.trigger_reward
         return -self.trigger_reward
@@ -160,9 +159,9 @@ class ObjectLocalizationEnv():
         elif action[1]:
             bbox[0] = bbox[0] - a_w
         elif action[2]:
-            bbox[1] = bbox[1] + a_h
-        elif action[3]:
             bbox[1] = bbox[1] - a_h
+        elif action[3]:
+            bbox[1] = bbox[1] + a_h
         elif action[4]:
             bbox[0] = bbox[0] - a_w
             bbox[1] = bbox[1] - a_h
@@ -193,9 +192,13 @@ class ObjectLocalizationEnv():
             bbox[2] = 1
         if bbox[3] < 1:
             bbox[3] = 1
+        if bbox[2] > self.max_w:
+            bbox[2] = self.max_w
+        if bbox[3] > self.max_h:
+            bbox[3] = self.max_h
         if bbox[0] + bbox[2] > self.max_w:
-            bbox[2] = self.max_w - bbox[0]
+            bbox[0] = self.max_w - bbox[2]
         if bbox[1] + bbox[3] > self.max_h:
-            bbox[3] = self.max_h - bbox[1]
+            bbox[1] = self.max_h - bbox[3]
 
         return bbox, done

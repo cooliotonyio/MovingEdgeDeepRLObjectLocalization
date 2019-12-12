@@ -23,7 +23,7 @@ class ReplayBuffer(object):
 
     def can_sample(self, batch_size):
         """Returns true if buffer contains at least batch_size rollouts"""
-        return batch_size < self.num_in_buffer
+        return batch_size <= self.num_in_buffer
 
     def add_rollouts(self, rollouts):
         """Add rollouts to memory buffer"""

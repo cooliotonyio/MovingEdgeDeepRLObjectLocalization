@@ -20,7 +20,6 @@ def get_q_network(loss = "huber_loss", optimizer = None):
     model.add(Activation("relu"))
     model.add(Dropout(0.2))
     model.add(Dense(9))
-    model.add(Activation("softmax"))
     
     model.compile(loss = loss, optimizer = optimizer)
     return model
@@ -38,8 +37,6 @@ class DQN_Agent():
         self.batch_size = agent_params["batch_size"]
         self.replay_buffer = ReplayBuffer(agent_params["replay_buffer_size"])
 
-        self.train_loss_metric = agent_params["train_loss_metric"]
-
         self.q_func = get_q_network(self.loss, self.optimizer)
         self.t = 0
 
@@ -49,7 +46,6 @@ class DQN_Agent():
             acs = self.env.get_random_expert_action()
         else:
             q_vals = self._get_q_vals(obs)
-            print(q_vals)
             acs = tf.one_hot(tf.math.argmax(q_vals), self.ac_dim)
         return acs
 
@@ -80,19 +76,39 @@ class DQN_Agent():
 
         obs, acs, rew, next_obs, done = self.sample_replay_buffer(batch_size)
 
-        pred_q_vals = tf.reduce_sum(self.q_func.predict(obs) * acs, axis = 1)
-        target_q_vals = self._get_target_q_vals(rew, next_obs, done)
+        pred_q_vals = self.q_func.predict(obs)
+        target_q_vals = self._get_target_q_vals(pred_q_vals, acs, rew, next_obs, done, batch_size)
 
-        self.q_func.fit(obs, target_q_vals, batch_size = batch_size, epochs = 1)
+        self.q_func.fit(obs, target_q_vals, batch_size = batch_size, epochs = 1, verbose = 0)
 
-        total_loss = self.loss(target_q_vals, pred_q_vals)
-        return total_loss
+        loss = self.loss(pred_q_vals, target_q_vals)
+        return loss
 
-    def _get_target_q_vals(self, rew, next_obs, done):
+    def _get_target_q_vals(self, pred_q_vals, acs, rew, next_obs, done, batch_size):
+        """Returns target q_vals to train on"""
+        q_vals = pred_q_vals.copy()
+        update_targets = self._get_update_vals(rew, next_obs, done)
+        idx_to_update = self._action_to_idx(acs)
+        for i in np.arange(batch_size):
+            q_vals[i][idx_to_update[i]] = update_targets[i]
+        return q_vals
+
+    def _get_update_vals(self, rew, next_obs, done):
+        """
+        Gets the target q_val from next state and reward of the specific action preceding next_obs
+        
+        Q_value target = reward + (1-done) * gamma * q value of next state
+        """
         next_q_val = tf.math.reduce_max(self._get_q_vals(next_obs), axis = 1)
         done_mask = tf.reshape(tf.ones(done.shape) - done, next_q_val.shape)
         rew = tf.reshape(rew, next_q_val.shape)
         return rew + (done_mask * self.gamma * next_q_val)
+
+    def _action_to_idx(self, acs):
+        """Turns 9-dim action vector into scalar idx of action"""
+        if len(acs.shape) == 1:
+            return tf.math.argmax(acs)
+        return tf.math.argmax(acs, axis = 1)
 
     def sample_replay_buffer(self, batch_size=None):
         """Randomly samples 'batch_size' rollouts from self.replay_buffer"""

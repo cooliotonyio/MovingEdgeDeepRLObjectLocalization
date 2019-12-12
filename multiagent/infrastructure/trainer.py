@@ -78,18 +78,18 @@ class RL_Trainer(object):
                 if done:
                     break
 
-            rews = [r["rew"].numpy()[0] for r in rollouts]
-            print("PATH:  \t",[np.argmax(r["acs"]) for r in rollouts])
-            print("REWARD:\t", rews)
-            print("TOTAL: \t", np.sum(rews))
-
             self.agent.add_to_replay_buffer(rollouts)
+            
+            rews = [r["rew"].numpy()[0] for r in rollouts]
+            print("PATH:   \t",[np.argmax(r["acs"]) for r in rollouts])
+            print("REWARDs:\t", rews)
+            print("RETURN: \t", np.sum(rews))
+            print("TIME:  \t", time.time() - self.start_time)
+            print("STEPS: \t", self.total_envsteps)
 
             # Train agent (using sampled data from replay buffer)
             if i % self.learning_freq == 0 and self.agent.can_sample_replay_buffer():
                 loss = self.agent.train()
-                print("ITER:", i)
-                print("TIME:", time.time() - self.start_time)
-                print("LOSS:", loss.numpy())
+                print("LOSS:  \t", loss.numpy())
     
                 
