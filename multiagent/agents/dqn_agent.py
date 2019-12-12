@@ -8,17 +8,17 @@ from tensorflow.keras.optimizers import Adam
 from multiagent.util.dqn_utils import huber_loss, ReplayBuffer
 
 
-def get_q_network(loss = "huber_loss", optimizer = None):
+def get_q_network(loss = "huber_loss", optimizer = None, dropout = 0.2):
     if optimizer is None:
         optimizer = Adam(lr=1e-6)
 
     model = Sequential()
     model.add(Dense(1024, input_shape=(4096 + 90,)))
     model.add(Activation("relu"))
-    model.add(Dropout(0.2))
+    model.add(Dropout(dropout))
     model.add(Dense(1024))
     model.add(Activation("relu"))
-    model.add(Dropout(0.2))
+    model.add(Dropout(dropout))
     model.add(Dense(9))
     
     model.compile(loss = loss, optimizer = optimizer)
@@ -36,8 +36,9 @@ class DQN_Agent():
         self.epsilon = agent_params["epsilon"]
         self.batch_size = agent_params["batch_size"]
         self.replay_buffer = ReplayBuffer(agent_params["replay_buffer_size"])
+        self.dropout = agent_params["dropout"]
 
-        self.q_func = get_q_network(self.loss, self.optimizer)
+        self.q_func = get_q_network(self.loss, self.optimizer, self.dropout)
         self.t = 0
 
     def get_action(self, obs, mode="train"):
