@@ -47,7 +47,6 @@ class ObjectLocalizationEnv():
 
         self.next_reset_location = RotationEnum.START
 
-
     def get_reward(self, old_bbox, action, new_bbox):
         """Returns reward, {-1,+1} for non-trigger actions, {-trigger_reward, +trigger_reward} for trigger action"""
         return tf.reshape(tf.cast(self._reward(old_bbox, action, new_bbox), tf.float32), (1,))
@@ -268,7 +267,7 @@ class ObjectLocalizationEnv():
                 if self.target_bbox_ind_to_pop: #Draw over target bbox, not found bbox
                     draw_bbox = self.target_bboxs.pop(max_bbox_index) #TODO: Find faster way to store and remove bboxs?
                     self.image = draw_cross(self.image, draw_bbox)
-                if len(self.target_bboxs) > 0:
+                if len(self.target_bboxs) == 0:
                     done = tf.ones((1,))
             else: #Draw over found bbox in test mode
                 self.image = draw_cross(self.image, self.obs_bbox)
