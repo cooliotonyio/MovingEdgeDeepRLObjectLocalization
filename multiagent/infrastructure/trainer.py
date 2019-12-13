@@ -55,6 +55,9 @@ class RL_Trainer(object):
         """
         self.start_time = time.time()
         self.total_envsteps = 0
+        
+        returns = []
+        losses = []
 
         for i in range(n_iter):
             print("\n\n********** Iteration %i ************"%i)
@@ -86,9 +89,13 @@ class RL_Trainer(object):
             print("TIME:  \t", time.time() - self.start_time)
             print("STEPS: \t", self.total_envsteps)
 
+            returns.append(np.sum(rews))
             # Train agent (using sampled data from replay buffer)
             if i % self.learning_freq == 0 and self.agent.can_sample_replay_buffer():
                 loss = self.agent.train()
+                losses.append(loss)
                 print("LOSS:  \t", loss.numpy())
+
+        return returns, losses
     
                 
