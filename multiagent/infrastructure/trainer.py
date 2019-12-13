@@ -55,7 +55,6 @@ class RL_Trainer(object):
         """
         self.start_time = time.time()
         self.total_envsteps = 0
-        #TODO: make this work
 
         for i in range(n_iter):
             print("\n\n********** Iteration %i ************"%i)

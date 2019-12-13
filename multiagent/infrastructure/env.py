@@ -46,6 +46,7 @@ class ObjectLocalizationEnv():
             return self.trigger_reward
         return -self.trigger_reward
     
+    #TODO: Limit environment to 40 steps, then reset to next location, with a maximum of 200 steps. 
     def step(self, action):
         """
         Takes one step through the environment. Returns next_state, reward, and if the episode has terminated
@@ -80,8 +81,12 @@ class ObjectLocalizationEnv():
         
         return obs, rew, done
         
+    #TODO: Allow for multiple target_bbox's to be used, instead of only one.
     def reset(self, target_bbox = None, image = None):
         """Resets the env. Resets bbox to entire image."""
+        #TODO: If target_bbox is None:
+        #       Allow reset to resize obs_bbox to 75% of the original size (not full image)
+        #       placed in one of the following locations, in order: TL, TR, BL, BR
         if target_bbox is not None:
             self.target_bbox = target_bbox
         if image is not None:
