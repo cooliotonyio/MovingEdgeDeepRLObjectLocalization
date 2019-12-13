@@ -1,14 +1,14 @@
 import numpy as np
 import tensorflow as tf
 
-from tensorflow.keras.layers import Dense, Activation, Dropout
-from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Input, Dense, Activation, Dropout, Lambda, Add
+from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.optimizers import Adam
 
 from multiagent.util.dqn_utils import huber_loss, ReplayBuffer
 
 
-def get_q_network(loss = "huber_loss", optimizer = None, dropout = 0.2):
+def get_q_network(loss = "huber_loss", optimizer = None, dropout = 0.1):
     if optimizer is None:
         optimizer = Adam(lr=1e-6)
 
@@ -23,6 +23,48 @@ def get_q_network(loss = "huber_loss", optimizer = None, dropout = 0.2):
     
     model.compile(loss = loss, optimizer = optimizer)
     return model
+
+def get_joint_q_netowrk(self, loss="huber_loss", optimizer = None,  dropout = 0.1):
+    if optimizer is None:
+        optimizer = Adam(lr=1e-6)
+
+    # Input Layer
+    input_1, input_2 = Input(shape=(4096+90)), Input(shape=(4096+90))
+
+    # First 1024 fully connected
+    d1_1, d1_2 = Dense(1024)(input_1), Dense(1024)(input_2)
+    a1_1, a1_2 = Activation("relu")(d1_1), Activation("relu")(d1_2)
+    dropout1_1, dropout1_2 = Dropout(dropout)(a1_1), Dropout(dropout)(a1_2)
+
+    # Second 1024 fully connected
+    d2_1, d2_2 = Dense(1024)(dropout1_1), Dense(1024)(dropout1_2)
+    a2_1, a2_2 = Activation("sigmoid")(d2_1), Activation("sigmoid")(d2_2)
+    dropout2_1, dropout2_2 = Dropout(dropout)(a2_1), Dropout(dropout)(a2_2)
+
+    # build x_bar and messages
+    x_bar_1, x_bar_2 = Dense(9)(dropout2_1), Dense(9)(dropout2_2)
+    message_1, message_2 = Dense(9)(dropout2_1), Dense(9)(dropout2_2)
+
+    # Gate is based off of x_bar
+    # in theory, if model is confident in x_bar, gate will be close to 0
+    gate_1, gate_2 = Dense(1, activation="sigmoid")(x_bar_1), Dense(9, activation="sigmoid")(x_bar_2)
+
+    # Actual value of x_bar part
+    gx_1 = Lambda(lambda x: x[0]*x[1])([gate_1, x_bar_1])
+    gx_2 = Lambda(lambda x: x[0]*x[1])([gate_2, x_bar_2])
+
+    # Message 2 goes through (1-gate1), and vice versa
+    complement1 = Lambda(lambda x: (1-x[0]) * x[1])([gate_1, message_2])
+    complement2 = Lambda(lambda x: (1-x[0]) * x[1])([gate_2, message_1])
+
+    # Add both original x_bar output and message component
+    output_1 = Add()([gx_1, complement1])
+    output_2 = Add()([gx_2, complement2])
+
+    model = Model(inputs=[input_1, input_2], outputs=[output_1, output_2])
+    model.compile(loss = loss, optimizer = optimizer)
+    return model
+
 
 class DQN_Agent():
     def __init__(self, params, agent_params):
