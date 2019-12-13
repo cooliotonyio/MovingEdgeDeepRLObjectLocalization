@@ -4,6 +4,7 @@ import tensorflow as tf
 from PIL import Image
 from tensorflow.keras.applications.vgg16 import preprocess_input
 from multiagent.util.bbox import get_iou, draw_bbox, draw_cross
+from copy import deepcopy
 
 class RotationEnum:
     START = -1
@@ -79,6 +80,7 @@ class ObjectLocalizationEnv():
             ret = self.trigger_reward
         ret = -self.trigger_reward
 
+        self.target_bbox_ind_to_pop = max_bbox_index
         return ret
     
     #TODO: Limit environment to 40 steps, then reset to next location, with a maximum of 200 steps. 
@@ -118,8 +120,8 @@ class ObjectLocalizationEnv():
         
 
     def training_reset(self):
-        self.target_bboxs = self.orig_target_bboxs
-        self.image = self.orig_image
+        self.target_bboxs = [deepcopy(bbox) for bbox in self.orig_target_bboxs]
+        self.image = tf.identity(self.orig_image)
         self.found_bboxs = []
         self.next_reset_location = RotationEnum.START
         self.reset() #use regular reset afterwards
@@ -142,11 +144,11 @@ class ObjectLocalizationEnv():
                 self.target_bboxs = target_bboxs
             else:
                 self.target_bboxs = [target_bboxs]
-            self.orig_target_bboxs = self.target_bboxs
+            self.orig_target_bboxs = [deepcopy(bbox) for bbox in self.target_bboxs]
 
         if image is not None:
             self.image = image
-            self.orig_image = image
+            self.orig_image = tf.identity(image)
             self.found_bboxs = []
             
         self.history = tf.zeros([self.history_len, len(self.actions)], dtype=tf.dtypes.float32)
@@ -166,7 +168,9 @@ class ObjectLocalizationEnv():
                 self.obs_bbox = [0, self.max_h - new_maxh, new_maxw, self.max_h]
             elif self.next_reset_location == RotationEnum.BR:
                 self.obs_bbox = [self.max_w - new_maxw, self.max_h - new_maxh, self.max_w, self.max_h]
-            self.next_reset_location = (self.next_reset_location + 1) % 4
+        
+        self.obs_bbox = self._sanitize_bbox(self.obs_bbox)
+        self.next_reset_location = (self.next_reset_location + 1) % 4
 
         self.obs_feature = self._get_obs_feature()
         self.history_vector = self._get_history_vector()
@@ -185,7 +189,6 @@ class ObjectLocalizationEnv():
         image = draw_bbox(image, self.obs_bbox, fill="red")
         # Draw target bbox in green
         if self.orig_target_bboxs:
-            print(self.orig_target_bboxs)
             for bbox in self.orig_target_bboxs:
                 image = draw_bbox(image, bbox, fill="green")
         return image
@@ -209,7 +212,7 @@ class ObjectLocalizationEnv():
         """Indexes of all positive actions"""
         positive_actions = []
         for i in range(len(self.actions)):
-            new_bbox, _ = self._step(self.actions[i], self.obs_bbox)
+            new_bbox, _ = self._step(self.actions[i], self.obs_bbox, test=True)
             if self._reward(self.obs_bbox, self.actions[i], new_bbox) > 0:
                 positive_actions.append(i)
         return positive_actions
@@ -224,7 +227,35 @@ class ObjectLocalizationEnv():
             action_idx = np.random.randint(len(self.actions))
         return self.actions[action_idx]
 
-    def _step(self, action, bbox):
+    def _draw_cross_on_env(self, bbox):
+        pil_image = Image.fromarray(self.image.numpy()[0])
+        pil_image_w_cross = draw_cross(pil_image, bbox)
+        self.image = tf.expand_dims(np.array(pil_image_w_cross), 0)
+
+    def _sanitize_bbox(self, bbox):
+        bbox = [int(i) for i in np.rint(bbox)]
+        
+        # Ensure obs_bbox is within bounds
+        if bbox[0] < 0:
+            bbox[0] = 0
+        if bbox[1] < 0:
+            bbox[1] = 0
+        if bbox[2] < 1:
+            bbox[2] = 1
+        if bbox[3] < 1:
+            bbox[3] = 1
+        if bbox[2] > self.max_w:
+            bbox[2] = self.max_w
+        if bbox[3] > self.max_h:
+            bbox[3] = self.max_h
+        if bbox[0] + bbox[2] > self.max_w:
+            bbox[0] = self.max_w - bbox[2]
+        if bbox[1] + bbox[3] > self.max_h:
+            bbox[1] = self.max_h - bbox[3]
+
+        return bbox
+
+    def _step(self, action, bbox, test=False):
         bbox = bbox.copy()
 
         a_w = bbox[2] * self.transformation_factor
@@ -263,36 +294,23 @@ class ObjectLocalizationEnv():
             bbox[0] = bbox[0] + a_w
             bbox[2] = bbox[2] - 2 * a_w
         elif action[8]:
-            if self.orig_target_bboxs is not None: #In training mode
-                if self.target_bbox_ind_to_pop: #Draw over target bbox, not found bbox
-                    draw_bbox = self.target_bboxs.pop(max_bbox_index) #TODO: Find faster way to store and remove bboxs?
-                    self.image = draw_cross(self.image, draw_bbox)
-                if len(self.target_bboxs) == 0:
-                    done = tf.ones((1,))
-            else: #Draw over found bbox in test mode
-                self.image = draw_cross(self.image, self.obs_bbox)
-            self.found_bboxs.append(self.obs_bbox)
+            if not test:
+                if self.orig_target_bboxs is not None: #In training mode
+                    if not self.target_bbox_ind_to_pop: #Draw over target bbox, not found bbox
+                        iou, max_bbox_index = self._get_max_iou(self.obs_bbox)
+                        self.target_bbox_ind_to_pop = max_bbox_index
 
-            self.reset()
+                    bbox_to_draw = self.target_bboxs.pop(self.target_bbox_ind_to_pop) #TODO: Find faster way to store and remove bboxs?
+                    self._draw_cross_on_env(bbox_to_draw)
 
-        bbox = [int(i) for i in np.rint(bbox)]
-            
-        # Ensure obs_bbox is within bounds
-        if bbox[0] < 0:
-            bbox[0] = 0
-        if bbox[1] < 0:
-            bbox[1] = 0
-        if bbox[2] < 1:
-            bbox[2] = 1
-        if bbox[3] < 1:
-            bbox[3] = 1
-        if bbox[2] > self.max_w:
-            bbox[2] = self.max_w
-        if bbox[3] > self.max_h:
-            bbox[3] = self.max_h
-        if bbox[0] + bbox[2] > self.max_w:
-            bbox[0] = self.max_w - bbox[2]
-        if bbox[1] + bbox[3] > self.max_h:
-            bbox[1] = self.max_h - bbox[3]
+                    self.target_bbox_ind_to_pop = None
+                    if len(self.target_bboxs) == 0:
+                        done = tf.ones((1,))
+                else: #Draw over found bbox in test mode
+                    self._draw_cross_on_env(self.obs_bbox)
+                self.found_bboxs.append(self.obs_bbox)
 
+                self.reset()
+
+        bbox = self._sanitize_bbox(bbox)
         return bbox, done
