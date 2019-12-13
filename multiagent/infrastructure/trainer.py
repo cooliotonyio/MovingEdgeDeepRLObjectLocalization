@@ -59,7 +59,7 @@ class RL_Trainer(object):
         for i in range(n_iter):
             print("\n\n********** Iteration %i ************"%i)
 
-            self.env.reset()
+            self.env.training_reset()
             rollouts = []
             done = False
 

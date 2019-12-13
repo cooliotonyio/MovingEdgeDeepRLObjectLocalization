@@ -3,7 +3,14 @@ import tensorflow as tf
 
 from PIL import Image
 from tensorflow.keras.applications.vgg16 import preprocess_input
-from multiagent.util.bbox import get_iou, draw_bbox
+from multiagent.util.bbox import get_iou, draw_bbox, draw_cross
+
+class RotationEnum:
+    START = -1
+    TL = 0
+    TR = 1
+    BL = 2
+    BR = 3
 
 class ObjectLocalizationEnv():
     def __init__(
@@ -30,21 +37,50 @@ class ObjectLocalizationEnv():
         self.actions = np.identity(9)
 
 
+        self.target_bboxs = []
+        self.orig_target_bboxs = None
+        self.found_bboxs = []
+        self.image = None
+        self.orig_image = None
+
+        self.target_bbox_ind_to_pop = None
+
+        self.next_reset_location = RotationEnum.START
+
+
     def get_reward(self, old_bbox, action, new_bbox):
         """Returns reward, {-1,+1} for non-trigger actions, {-trigger_reward, +trigger_reward} for trigger action"""
         return tf.reshape(tf.cast(self._reward(old_bbox, action, new_bbox), tf.float32), (1,))
         
+
+    def _get_max_iou(self, bbox):
+        max_bbox_index = None
+        max_iou = -np.inf
+
+        for ind, target_bbox in enumerate(self.target_bboxs):
+            iou = get_iou(bbox, target_bbox)
+            if iou > max_iou:
+                max_bbox_index = ind
+                max_iou = iou
+        
+        return max_iou, max_bbox_index
+
     def _reward(self, old_bbox, action, new_bbox):
         # non-trigger action reward
         if not action[8]:
-            if get_iou(new_bbox, self.target_bbox) > get_iou(old_bbox,self.target_bbox):
+            new_max_iou, _ = self._get_max_iou(new_bbox)
+            old_max_iou, _ = self._get_max_iou(old_bbox)
+            if new_max_iou > old_max_iou:
                 return 1
             return -1
         
         # trigger action reward
-        if get_iou(new_bbox, self.target_bbox) > self.trigger_threshold:
-            return self.trigger_reward
-        return -self.trigger_reward
+        new_iou, max_bbox_index = self._get_max_iou(new_bbox)
+        if new_iou > self.trigger_threshold:
+            ret = self.trigger_reward
+        ret = -self.trigger_reward
+
+        return ret
     
     #TODO: Limit environment to 40 steps, then reset to next location, with a maximum of 200 steps. 
     def step(self, action):
@@ -81,20 +117,58 @@ class ObjectLocalizationEnv():
         
         return obs, rew, done
         
-    #TODO: Allow for multiple target_bbox's to be used, instead of only one.
-    def reset(self, target_bbox = None, image = None):
-        """Resets the env. Resets bbox to entire image."""
-        #TODO: If target_bbox is None:
-        #       Allow reset to resize obs_bbox to 75% of the original size (not full image)
-        #       placed in one of the following locations, in order: TL, TR, BL, BR
-        if target_bbox is not None:
-            self.target_bbox = target_bbox
+
+    def training_reset(self):
+        self.target_bboxs = self.orig_target_bboxs
+        self.image = self.orig_image
+        self.found_bboxs = []
+        self.next_reset_location = RotationEnum.START
+        self.reset() #use regular reset afterwards
+
+    #TODO: Allow for multiple target_bboxs's to be used, instead of only one.
+    def reset(self, target_bboxs = None, image = None):
+        """
+        
+        Resets the env. Resets bbox to entire image.
+        
+        If not in training mode:
+
+            Reset resizes obs_bbox to 75% of the original size (not full image)
+            placed in one of the following locations, in order: TL, TR, BL, BR
+
+        """
+        #TODO: If target_bboxs is None:
+        if target_bboxs is not None:
+            if type(target_bboxs) == list:
+                self.target_bboxs = target_bboxs
+            else:
+                self.target_bboxs = [target_bboxs]
+            self.orig_target_bboxs = self.target_bboxs
+
         if image is not None:
             self.image = image
+            self.orig_image = image
+            self.found_bboxs = []
             
         self.history = tf.zeros([self.history_len, len(self.actions)], dtype=tf.dtypes.float32)
         _, self.max_h, self.max_w, _ = self.image.shape
-        self.obs_bbox = [0, 0, self.max_w, self.max_h] 
+
+
+        if self.next_reset_location == RotationEnum.START:
+            self.obs_bbox = [0, 0, self.max_w, self.max_h] 
+        else:
+            new_maxh = self.max_h * 0.866
+            new_maxw = self.max_w * 0.866
+            if self.next_reset_location == RotationEnum.TL:
+                self.obs_bbox = [0, 0, new_maxw, new_maxh]
+            elif self.next_reset_location == RotationEnum.TR:
+                self.obs_bbox = [self.max_w - new_maxw, 0, self.max_w, new_maxh]
+            elif self.next_reset_location == RotationEnum.BL:
+                self.obs_bbox = [0, self.max_h - new_maxh, new_maxw, self.max_h]
+            elif self.next_reset_location == RotationEnum.BR:
+                self.obs_bbox = [self.max_w - new_maxw, self.max_h - new_maxh, self.max_w, self.max_h]
+            self.next_reset_location = (self.next_reset_location + 1) % 4
+
         self.obs_feature = self._get_obs_feature()
         self.history_vector = self._get_history_vector()
 
@@ -106,9 +180,15 @@ class ObjectLocalizationEnv():
         """Draws both target bbox and current bbox in the image"""
         image = Image.fromarray(self.image.numpy()[0])
         # Draw current bbox in red
+        if self.found_bboxs:
+            for bbox in self.found_bboxs:
+                image = draw_bbox(image, bbox, fill="yellow")
         image = draw_bbox(image, self.obs_bbox, fill="red")
         # Draw target bbox in green
-        image = draw_bbox(image, self.target_bbox, fill="green")
+        if self.orig_target_bboxs:
+            print(self.orig_target_bboxs)
+            for bbox in self.orig_target_bboxs:
+                image = draw_bbox(image, bbox, fill="green")
         return image
     
     def get_ac_dim(self):
@@ -184,8 +264,18 @@ class ObjectLocalizationEnv():
             bbox[0] = bbox[0] + a_w
             bbox[2] = bbox[2] - 2 * a_w
         elif action[8]:
-            done = tf.ones((1,))
-        
+            if self.orig_target_bboxs is not None: #In training mode
+                if self.target_bbox_ind_to_pop: #Draw over target bbox, not found bbox
+                    draw_bbox = self.target_bboxs.pop(max_bbox_index) #TODO: Find faster way to store and remove bboxs?
+                    self.image = draw_cross(self.image, draw_bbox)
+                if len(self.target_bboxs) > 0:
+                    done = tf.ones((1,))
+            else: #Draw over found bbox in test mode
+                self.image = draw_cross(self.image, self.obs_bbox)
+            self.found_bboxs.append(self.obs_bbox)
+
+            self.reset()
+
         bbox = [int(i) for i in np.rint(bbox)]
             
         # Ensure obs_bbox is within bounds

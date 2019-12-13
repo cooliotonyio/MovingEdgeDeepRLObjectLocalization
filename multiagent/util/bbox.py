@@ -3,13 +3,24 @@ from PIL import ImageDraw
 def draw_bbox(img, bbox, width = 2, fill = "green"):
     """Takes in PIL.Image, bbox info and draws bounding box"""
     draw = ImageDraw.Draw(img)
-    p1 = tuple(bbox[:2])
-    p2 = (p1[0] + bbox[2], p1[1])
-    p3 = (p2[0], p2[1] + bbox[3])
-    p4 = (p1[0], p3[1])
+    p1, p2, p3, p4 = bbox_to_points(bbox)
     draw.line([p1,p2,p3,p4,p1], width=width, fill=fill)
     return img
 
+def draw_cross(img, bbox, fill="black"):
+    draw = ImageDraw.Draw(img)
+
+    p1, p2, p3, p4 = bbox_to_points(bbox)
+
+    xcenter = (p1[0] + p2[0]) * 0.5
+    width_size = int((p2[0] - p1[0]) * 0.2)
+    ycenter = (p2[1] + p3[1]) * 0.5
+    height_size = int((p3[1] - p2[1]) * 0.2)
+
+    draw.line(((xcenter, p1[1]), (xcenter, p3[1])), width=width_size, fill=fill)
+    draw.line(((p1[0], ycenter), (p3[0], ycenter)), width=height_size, fill=fill)
+    return img
+    
 def get_area(bbox):
     """Gets area of bbox"""
     return bbox[2] * bbox[3]
@@ -35,6 +46,16 @@ def get_iou(bbox1, bbox2):
     iou = intersection_area / float(bb1_area + bb2_area - intersection_area)
 
     return iou
+
+def bbox_to_points(bbox):
+    '''
+    Return points rotating clockwise from the top right corner
+    '''
+    p1 = tuple(bbox[:2])
+    p2 = (p1[0] + bbox[2], p1[1])
+    p3 = (p2[0], p2[1] + bbox[3])
+    p4 = (p1[0], p3[1])
+    return p1, p2, p3, p4
 
 def bbox_to_corners(bbox):
     """Returns the top-left and bottom-right corners of a bbox"""
