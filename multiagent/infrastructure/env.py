@@ -1,10 +1,12 @@
 import numpy as np
 import tensorflow as tf
+import time
 
 from PIL import Image
 from tensorflow.keras.applications.vgg16 import preprocess_input
 from multiagent.util.bbox import get_iou, draw_bbox, draw_cross
 from copy import deepcopy
+
 
 class RotationEnum:
     START = -1
@@ -314,3 +316,47 @@ class ObjectLocalizationEnv():
 
         bbox = self._sanitize_bbox(bbox)
         return bbox, done
+
+class TimedObjectLocalizationEnv(ObjectLocalizationEnv):
+    """
+    Test results:
+    {   
+        '_reward': 0.5307285785675049,
+        '_step': 33.052706241607666,
+        '_get_obs_feature': 523.5038330554962,
+        '_get_history_vector': 0.22332167625427246
+    }
+
+    """
+    def __init__(self, *args, **kwargs):
+        super(TimedObjectLocalizationEnv, self).__init__(*args, **kwargs)
+        self.time = {
+            "_reward": 0,
+            "_step": 0,
+            "_get_obs_feature": 0,
+            "_get_history_vector": 0,
+        }
+
+    def _step(self, *args, **kwargs):
+        start_time = time.time()
+        return_val = super(TimedObjectLocalizationEnv, self)._step(*args, **kwargs)
+        self.time["_step"] += time.time() - start_time
+        return return_val
+
+    def _reward(self, *args, **kwargs):
+        start_time = time.time()
+        return_val = super(TimedObjectLocalizationEnv, self)._reward(*args, **kwargs)
+        self.time["_reward"] += time.time() - start_time
+        return return_val
+
+    def _get_obs_feature(self, *args, **kwargs):
+        start_time = time.time()
+        return_val = super(TimedObjectLocalizationEnv, self)._get_obs_feature(*args, **kwargs)
+        self.time["_get_obs_feature"] += time.time() - start_time
+        return return_val
+
+    def _get_history_vector(self, *args, **kwargs):
+        start_time = time.time()
+        return_val = super(TimedObjectLocalizationEnv, self)._get_history_vector(*args, **kwargs)
+        self.time["_get_history_vector"] += time.time() - start_time
+        return return_val
