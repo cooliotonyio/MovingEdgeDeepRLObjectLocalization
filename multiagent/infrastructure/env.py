@@ -69,7 +69,7 @@ class ObjectLocalizationEnv():
 
     def _reward(self, old_bbox, action, new_bbox):
         # non-trigger action reward
-        if not action[8]:
+        if action[8] == 0:
             new_max_iou, _ = self._get_max_iou(new_bbox)
             old_max_iou, _ = self._get_max_iou(old_bbox)
             if new_max_iou > old_max_iou:
@@ -80,7 +80,8 @@ class ObjectLocalizationEnv():
         new_iou, max_bbox_index = self._get_max_iou(new_bbox)
         if new_iou > self.trigger_threshold:
             ret = self.trigger_reward
-        ret = -self.trigger_reward
+        else:
+            ret = -self.trigger_reward
 
         self.target_bbox_ind_to_pop = max_bbox_index
         return ret
@@ -105,7 +106,7 @@ class ObjectLocalizationEnv():
             action = action[0]
 
         old_bbox = self.obs_bbox.copy()
-        self.obs_bbox, done = self._step(action, self.obs_bbox)
+        self.obs_bbox = self._transform(action, self.obs_bbox)
 
         self.history = tf.concat([
             self.history[1:], 
@@ -117,6 +118,25 @@ class ObjectLocalizationEnv():
 
         obs = self.get_env_state()
         rew = self.get_reward(old_bbox, action, self.obs_bbox)
+
+        done = tf.zeros((1,))
+        
+        if action[8] == 1:
+            if self.orig_target_bboxs is not None: #In training mode
+                if not self.target_bbox_ind_to_pop: #Draw over target bbox, not found bbox
+                    _, max_bbox_index = self._get_max_iou(self.obs_bbox)
+                    self.target_bbox_ind_to_pop = max_bbox_index
+
+                bbox_to_draw = self.target_bboxs.pop(self.target_bbox_ind_to_pop) #TODO: Find faster way to store and remove bboxs?
+                self._draw_cross_on_env(bbox_to_draw)
+
+                self.target_bbox_ind_to_pop = None
+                if len(self.target_bboxs) == 0:
+                    done = tf.ones((1,))
+            else: #Draw over found bbox in test mode
+                self._draw_cross_on_env(self.obs_bbox)
+            self.found_bboxs.append(self.obs_bbox)
+            self.reset()
         
         return obs, rew, done
         
@@ -214,7 +234,7 @@ class ObjectLocalizationEnv():
         """Indexes of all positive actions"""
         positive_actions = []
         for i in range(len(self.actions)):
-            new_bbox, _ = self._step(self.actions[i], self.obs_bbox, test=True)
+            new_bbox = self._transform(self.actions[i], self.obs_bbox)
             if self._reward(self.obs_bbox, self.actions[i], new_bbox) > 0:
                 positive_actions.append(i)
         return positive_actions
@@ -257,7 +277,8 @@ class ObjectLocalizationEnv():
 
         return bbox
 
-    def _step(self, action, bbox, test=False):
+    def _transform(self, action, bbox):
+        """Returns a copy of bbox after transformation of action. Note: this function is non-mutating"""
         bbox = bbox.copy()
 
         a_w = bbox[2] * self.transformation_factor
@@ -267,9 +288,6 @@ class ObjectLocalizationEnv():
             a_w = 1
         if a_h < 1:
             a_h = 1
-        
-        done = tf.zeros((1,))
-        old_bbox = bbox.copy()
 
         if action[0]:
             bbox[0] = bbox[0] + a_w
@@ -295,34 +313,16 @@ class ObjectLocalizationEnv():
         elif action[7]:
             bbox[0] = bbox[0] + a_w
             bbox[2] = bbox[2] - 2 * a_w
-        elif action[8]:
-            if not test:
-                if self.orig_target_bboxs is not None: #In training mode
-                    if not self.target_bbox_ind_to_pop: #Draw over target bbox, not found bbox
-                        iou, max_bbox_index = self._get_max_iou(self.obs_bbox)
-                        self.target_bbox_ind_to_pop = max_bbox_index
-
-                    bbox_to_draw = self.target_bboxs.pop(self.target_bbox_ind_to_pop) #TODO: Find faster way to store and remove bboxs?
-                    self._draw_cross_on_env(bbox_to_draw)
-
-                    self.target_bbox_ind_to_pop = None
-                    if len(self.target_bboxs) == 0:
-                        done = tf.ones((1,))
-                else: #Draw over found bbox in test mode
-                    self._draw_cross_on_env(self.obs_bbox)
-                self.found_bboxs.append(self.obs_bbox)
-
-                self.reset()
 
         bbox = self._sanitize_bbox(bbox)
-        return bbox, done
+        return bbox
 
 class TimedObjectLocalizationEnv(ObjectLocalizationEnv):
     """
     Test results:
     {   
         '_reward': 0.5307285785675049,
-        '_step': 33.052706241607666,
+        '_transform': 33.052706241607666,
         '_get_obs_feature': 523.5038330554962,
         '_get_history_vector': 0.22332167625427246
     }
@@ -332,15 +332,15 @@ class TimedObjectLocalizationEnv(ObjectLocalizationEnv):
         super(TimedObjectLocalizationEnv, self).__init__(*args, **kwargs)
         self.time = {
             "_reward": 0,
-            "_step": 0,
+            "_transform": 0,
             "_get_obs_feature": 0,
             "_get_history_vector": 0,
         }
 
-    def _step(self, *args, **kwargs):
+    def _transform(self, *args, **kwargs):
         start_time = time.time()
-        return_val = super(TimedObjectLocalizationEnv, self)._step(*args, **kwargs)
-        self.time["_step"] += time.time() - start_time
+        return_val = super(TimedObjectLocalizationEnv, self)._transform(*args, **kwargs)
+        self.time["_transform"] += time.time() - start_time
         return return_val
 
     def _reward(self, *args, **kwargs):
