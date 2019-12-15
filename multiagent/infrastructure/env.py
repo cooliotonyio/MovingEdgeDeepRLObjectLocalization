@@ -68,6 +68,7 @@ class ObjectLocalizationEnv():
         return max_iou, max_bbox_index
 
     def _reward(self, old_bbox, action, new_bbox):
+        # TODO: each box has respective iou
         # non-trigger action reward
         if action[8] == 0:
             new_max_iou, _ = self._get_max_iou(new_bbox)
@@ -185,11 +186,11 @@ class ObjectLocalizationEnv():
             if self.next_reset_location == RotationEnum.TL:
                 self.obs_bbox = [0, 0, new_maxw, new_maxh]
             elif self.next_reset_location == RotationEnum.TR:
-                self.obs_bbox = [self.max_w - new_maxw, 0, self.max_w, new_maxh]
+                self.obs_bbox = [self.max_w - new_maxw, 0, new_maxw, new_maxh]
             elif self.next_reset_location == RotationEnum.BL:
-                self.obs_bbox = [0, self.max_h - new_maxh, new_maxw, self.max_h]
+                self.obs_bbox = [0, self.max_h - new_maxh, new_maxw, new_maxh]
             elif self.next_reset_location == RotationEnum.BR:
-                self.obs_bbox = [self.max_w - new_maxw, self.max_h - new_maxh, self.max_w, self.max_h]
+                self.obs_bbox = [self.max_w - new_maxw, self.max_h - new_maxh, new_maxw, new_maxh]
         
         self.obs_bbox = self._sanitize_bbox(self.obs_bbox)
         self.next_reset_location = (self.next_reset_location + 1) % 4
