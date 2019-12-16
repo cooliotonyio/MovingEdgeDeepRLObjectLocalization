@@ -4,7 +4,7 @@ import time
 
 from PIL import Image
 from tensorflow.keras.applications.vgg16 import preprocess_input
-from multiagent.util.bbox import get_iou, draw_bbox, draw_cross
+from multiagent.util.bbox import get_iou, draw_bbox, draw_cross, center_distance
 from copy import deepcopy
 
 
@@ -68,7 +68,7 @@ class ObjectLocalizationEnv():
         return max_iou, max_bbox_index
 
     def _reward(self, old_bbox, action, new_bbox):
-        # TODO: each box has respective iou
+        """Reward function"""
         # non-trigger action reward
         if action[8] == 0:
             new_max_iou, _ = self._get_max_iou(new_bbox)
@@ -140,7 +140,6 @@ class ObjectLocalizationEnv():
             self.reset()
         
         return obs, rew, done
-        
 
     def training_reset(self):
         self.target_bboxs = [deepcopy(bbox) for bbox in self.orig_target_bboxs]
@@ -361,3 +360,35 @@ class TimedObjectLocalizationEnv(ObjectLocalizationEnv):
         return_val = super(TimedObjectLocalizationEnv, self)._get_history_vector(*args, **kwargs)
         self.time["_get_history_vector"] += time.time() - start_time
         return return_val
+
+class ObjectLocalizationEnvBetterReward(ObjectLocalizationEnv):
+
+    def _reward(self, old_bbox, action, new_bbox):
+        """Reward Function"""
+        # Non-trigger reward
+        if action[8] == 0:
+            new_max_iou, new_max_bbox_index = self._get_max_iou(new_bbox)
+            old_max_iou, old_max_bbox_index = self._get_max_iou(old_bbox)
+            if new_max_iou > old_max_iou:
+                return 1
+            elif (  new_max_iou == old_max_iou and 
+                    new_max_bbox_index == old_max_bbox_index and
+                    self._is_closer(old_bbox, new_bbox, self.target_bboxs[new_max_bbox_index])):
+                return 1
+            return -1
+        
+        # Trigger reward
+        new_iou, max_bbox_index = self._get_max_iou(new_bbox)
+        if new_iou > self.trigger_threshold:
+            ret = self.trigger_reward
+        else:
+            ret = -self.trigger_reward
+
+        self.target_bbox_ind_to_pop = max_bbox_index
+        return ret
+
+    def _is_closer(self, old_bbox, new_bbox, target_bbox):
+        """Returns if new_bbox is closer to target_bbox than old_bbox)"""
+        old_distance = center_distance(old_bbox, target_bbox)
+        new_distance = center_distance(new_bbox, target_bbox)
+        return new_distance < old_distance

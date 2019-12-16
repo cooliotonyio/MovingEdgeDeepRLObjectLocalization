@@ -97,5 +97,3 @@ class RL_Trainer(object):
                 print("LOSS:  \t", loss.numpy())
 
         return returns, losses
-    
-                

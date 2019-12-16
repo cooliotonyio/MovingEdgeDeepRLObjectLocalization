@@ -48,9 +48,7 @@ def get_iou(bbox1, bbox2):
     return iou
 
 def bbox_to_points(bbox):
-    '''
-    Return points rotating clockwise from the top right corner
-    '''
+    """Return points rotating clockwise from the top right corner"""
     p1 = tuple(bbox[:2])
     p2 = (p1[0] + bbox[2], p1[1])
     p3 = (p2[0], p2[1] + bbox[3])
@@ -60,3 +58,16 @@ def bbox_to_points(bbox):
 def bbox_to_corners(bbox):
     """Returns the top-left and bottom-right corners of a bbox"""
     return (bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3])
+
+
+def bbox_center(bbox):
+    """Returns the (x,y) of the center of the box"""
+    return (int(bbox[0] + bbox[2] / 2), int(bbox[1] + bbox[3] / 2))
+
+def center_distance(bbox1, bbox2):
+    """Returns the euclidean distance between the centers of two bbox"""
+    return euclidean(bbox_center(bbox1), bbox_center(bbox2))
+
+def euclidean(p1, p2):
+    """Returns euclidean distances of two points"""
+    return ((p1[0] - p2[0]) ** 2 +  (p1[1] - p2[1]) ** 2) ** 0.5
