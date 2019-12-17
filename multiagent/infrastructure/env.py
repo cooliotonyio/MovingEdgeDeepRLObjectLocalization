@@ -24,7 +24,8 @@ class ObjectLocalizationEnv():
         trigger_threshold = 0.6, 
         trigger_reward = 3,
         history_len = 10,
-        feature_dim = 4096):
+        feature_dim = 4096,
+        padding = 10):
         """
         Environment in which the agent acts in
         """
@@ -36,7 +37,9 @@ class ObjectLocalizationEnv():
         self.trigger_reward = trigger_reward
         self.history_len = history_len
         self.feature_dim = feature_dim
+        self.padding = padding
 
+        # Base action space
         self.actions = np.identity(9)
 
         self.target_bboxs = []
@@ -56,7 +59,7 @@ class ObjectLocalizationEnv():
     def _reward(self, old_bbox, action, new_bbox):
         """Reward function"""
         # non-trigger action reward
-        if action[8] == 0:
+        if action[len(self.actions) - 1] == 0:
             new_max_iou, _ = self._get_max_iou(new_bbox)
             old_max_iou, _ = self._get_max_iou(old_bbox)
             if new_max_iou > old_max_iou:
@@ -87,18 +90,6 @@ class ObjectLocalizationEnv():
     def step(self, action):
         """
         Takes one step through the environment. Returns next_state, reward, and if the episode has terminated
-
-        Actions: [
-            0:right, 
-            1:left, 
-            2:up, 
-            3:down, 
-            4:bigger, 
-            5:smaller, 
-            6:fatter, 
-            7:taller, 
-            8:trigger]
-
         TODO: Limit environment to 40 steps, then reset to next location, with a maximum of 200 steps. 
         """
         if len(action.shape) == 2:
@@ -120,20 +111,15 @@ class ObjectLocalizationEnv():
 
         done = tf.zeros((1,))
         
-        if action[8] == 1:
+        if action[len(self.actions) - 1] == 1:
             if self.orig_target_bboxs is not None: #In training mode
-                if not self.target_bbox_ind_to_pop: #Draw over target bbox, not found bbox
-                    _, max_bbox_index = self._get_max_iou(self.obs_bbox)
-                    self.target_bbox_ind_to_pop = max_bbox_index
-
-                bbox_to_draw = self.target_bboxs.pop(self.target_bbox_ind_to_pop) #TODO: Find faster way to store and remove bboxs?
-                self._draw_cross_on_env(bbox_to_draw)
-
-                self.target_bbox_ind_to_pop = None
+                if self.target_bbox_ind_to_pop:
+                    self.target_bboxs.pop(self.target_bbox_ind_to_pop) 
+                    self.target_bbox_ind_to_pop = None
                 if len(self.target_bboxs) == 0:
                     done = tf.ones((1,))
-            else: #Draw over found bbox in test mode
-                self._draw_cross_on_env(self.obs_bbox)
+
+            self._draw_cross_on_env(self.obs_bbox)
             self.found_bboxs.append(self.obs_bbox)
             self.reset()
         
@@ -149,12 +135,15 @@ class ObjectLocalizationEnv():
             else:
                 self.target_bboxs = [target_bboxs]
             self.orig_target_bboxs = [deepcopy(bbox) for bbox in self.target_bboxs]
+        else:
+            self.target_bboxs = [deepcopy(bbox) for bbox in self.orig_target_bboxs]
 
         if image is not None:
             self.image = image
             self.orig_image = tf.identity(image)
-            self.found_bboxs = []
             _, self.max_h, self.max_w, _ = image.shape
+        else:
+            self.image = tf.identity(self.orig_image)
 
         self.found_bboxs = []
         self.next_reset_location = RotationEnum.START
@@ -218,7 +207,11 @@ class ObjectLocalizationEnv():
     
     def _get_obs_feature(self):
         """Extracts feature vector from current bbox"""
-        image = tf.image.crop_to_bounding_box(self.image, self.obs_bbox[1], self.obs_bbox[0], self.obs_bbox[3], self.obs_bbox[2])
+        x_offset, y_offset = self.obs_bbox[0] - self.padding, self.obs_bbox[1] - self.padding
+        w_offset, h_offset = self.obs_bbox[2] + self.padding, self.obs_bbox[3] + self.padding
+        padded_bbox = self._sanitize_bbox([x_offset, y_offset, w_offset, h_offset])
+        image = tf.image.crop_to_bounding_box(
+            self.image, padded_bbox[1], padded_bbox[0], padded_bbox[3], padded_bbox[2])
         image = preprocess_input(tf.image.resize(image, self.model_input_dim), mode="tf")
         self.obs_feature = tf.reshape(self.model(image), (self.feature_dim, ))
         return self.obs_feature
@@ -275,7 +268,20 @@ class ObjectLocalizationEnv():
         return bbox
 
     def _transform(self, action, bbox):
-        """Returns a copy of bbox after transformation of action. Note: this function is non-mutating"""
+        """
+        Returns a copy of bbox after transformation of action. Note: this function is non-mutating
+        
+        Actions: [
+            0:right, 
+            1:left, 
+            2:up, 
+            3:down, 
+            4:bigger, 
+            5:smaller, 
+            6:fatter, 
+            7:taller, 
+            8:trigger]
+        """
         bbox = bbox.copy()
 
         a_w = bbox[2] * self.transformation_factor
@@ -314,7 +320,7 @@ class ObjectLocalizationEnv():
         bbox = self._sanitize_bbox(bbox)
         return bbox
 
-class TimedObjectLocalizationEnv(ObjectLocalizationEnv):
+class TimedEnv(ObjectLocalizationEnv):
     """
     Test results:
     {   
@@ -358,20 +364,20 @@ class TimedObjectLocalizationEnv(ObjectLocalizationEnv):
         self.time["_get_history_vector"] += time.time() - start_time
         return return_val
 
-class ObjectLocalizationEnvBetterReward(ObjectLocalizationEnv):
+class BetterRewardEnv(ObjectLocalizationEnv):
 
     def _reward(self, old_bbox, action, new_bbox):
         """Reward Function"""
         # Non-trigger reward
-        if action[8] == 0:
+        if action[len(self.actions) - 1] == 0:
             new_max_iou, new_max_bbox_index = self._get_max_iou(new_bbox)
             old_max_iou, old_max_bbox_index = self._get_max_iou(old_bbox)
             if new_max_iou > old_max_iou:
                 return 1
-            elif (  new_max_iou == old_max_iou and 
-                    new_max_bbox_index == old_max_bbox_index and
-                    self._is_closer(old_bbox, new_bbox, self.target_bboxs[new_max_bbox_index])):
-                return 1
+            elif (new_max_iou == old_max_iou and new_max_bbox_index == old_max_bbox_index):
+                if self._is_closer(old_bbox, new_bbox, self.target_bboxs[new_max_bbox_index]):
+                    # When bbox gets closer to target_bbox
+                    return 1
             return -1
         
         # Trigger reward
@@ -389,3 +395,156 @@ class ObjectLocalizationEnvBetterReward(ObjectLocalizationEnv):
         old_distance = center_distance(old_bbox, target_bbox)
         new_distance = center_distance(new_bbox, target_bbox)
         return new_distance < old_distance
+
+class MovingEdgeEnv(ObjectLocalizationEnv):
+
+    def _transform(self, action, bbox):
+        """
+        Returns a copy of bbox after transformation of action. Note: this function is non-mutating
+        
+        Actions: [
+            0:Shift right edge right, 
+            1:Shift right edge left, 
+            2:Shift left edge right, 
+            3:Shift left edge left, 
+            4:Shift top edge up, 
+            5:Shift top edge down, 
+            6:Shift bottom edge up, 
+            7:Shift bottom edge down, 
+            8:trigger]
+        """
+        bbox = bbox.copy()
+
+        a_w = bbox[2] * self.transformation_factor
+        a_h = bbox[3] * self.transformation_factor
+
+        if a_w < 1:
+            a_w = 1
+        if a_h < 1:
+            a_h = 1
+
+        if action[0]:
+            bbox[0] = bbox[0] + a_w
+            bbox[2] = bbox[2] - a_w
+        elif action[1]:
+            bbox[0] = bbox[0] - a_w
+            bbox[2] = bbox[2] + a_w
+        elif action[2]:
+            bbox[2] = bbox[2] - a_w
+        elif action[3]:
+            bbox[2] = bbox[2] + a_w
+        elif action[4]:
+            bbox[1] = bbox[1] - a_h
+            bbox[3] = bbox[3] + a_h
+        elif action[5]:
+            bbox[1] = bbox[1] + a_h
+            bbox[3] = bbox[3] - a_h
+        elif action[6]:
+            bbox[3] = bbox[3] - a_h
+        elif action[7]:
+            bbox[3] = bbox[3] + a_h
+
+        bbox = self._sanitize_bbox(bbox)
+        return bbox
+
+class HierarchicalZoomEnv(ObjectLocalizationEnv):
+
+    def __init__(self, *args, **kwargs):
+        super(HierarchicalZoomEnv, self).__init__(*args, **kwargs)
+        self.actions = np.identity(5)
+
+    def _transform(self, action, bbox):
+        """
+        Returns a copy of bbox after transformation of action. Note: this function is non-mutating
+        
+        Actions: [
+            0:Zoom top-left
+            1:Zoom top-right
+            2:Zoom bottom-right, 
+            3:Zoom bottom-left, 
+            4:Trigger]
+        """
+        bbox = bbox.copy()
+
+        a_w = bbox[2] * self.transformation_factor
+        a_h = bbox[3] * self.transformation_factor
+
+        if a_w < 1:
+            a_w = 1
+        if a_h < 1:
+            a_h = 1
+
+        if action[0]:
+            bbox[2] = bbox[2] - a_w
+            bbox[3] = bbox[3] - a_h
+        elif action[1]:
+            bbox[0] = bbox[0] + a_w
+            bbox[2] = bbox[2] - a_w
+            bbox[3] = bbox[3] - a_h
+        elif action[2]:
+            bbox[0] = bbox[0] + a_w
+            bbox[1] = bbox[1] + a_h
+            bbox[2] = bbox[2] - a_w
+            bbox[3] = bbox[3] - a_h
+        elif action[3]:
+            bbox[1] = bbox[1] + a_h
+            bbox[2] = bbox[2] - a_w
+            bbox[3] = bbox[3] - a_h
+
+        bbox = self._sanitize_bbox(bbox)
+        return bbox
+
+class StretchyZoomEnv(ObjectLocalizationEnv):
+
+    def __init__(self, *args, **kwargs):
+        super(StretchyZoomEnv, self).__init__(*args, **kwargs)
+        self.actions = np.identity(7)
+
+    def _transform(self, action, bbox):
+        """
+        Returns a copy of bbox after transformation of action. Note: this function is non-mutating
+        
+        Actions: [
+            0:Zoom top-left
+            1:Zoom top-right
+            2:Zoom bottom-right, 
+            3:Zoom bottom-left, 
+            4:Fatter,
+            5:Taller,
+            6:Trigger]
+        """
+        bbox = bbox.copy()
+
+        a_w = bbox[2] * self.transformation_factor
+        a_h = bbox[3] * self.transformation_factor
+
+        if a_w < 1:
+            a_w = 1
+        if a_h < 1:
+            a_h = 1
+
+        if action[0]:
+            bbox[2] = bbox[2] - a_w
+            bbox[3] = bbox[3] - a_h
+        elif action[1]:
+            bbox[0] = bbox[0] + a_w
+            bbox[2] = bbox[2] - a_w
+            bbox[3] = bbox[3] - a_h
+        elif action[2]:
+            bbox[0] = bbox[0] + a_w
+            bbox[1] = bbox[1] + a_h
+            bbox[2] = bbox[2] - a_w
+            bbox[3] = bbox[3] - a_h
+        elif action[3]:
+            bbox[1] = bbox[1] + a_h
+            bbox[2] = bbox[2] - a_w
+            bbox[3] = bbox[3] - a_h
+        elif action[4]:
+            bbox[0] = bbox[0] - a_w
+            bbox[2] = bbox[2] + a_w * 2
+        elif action[5]:
+            bbox[1] = bbox[1] - a_h
+            bbox[3] = bbox[3] + a_h * 2
+
+        bbox = self._sanitize_bbox(bbox)
+        return bbox
