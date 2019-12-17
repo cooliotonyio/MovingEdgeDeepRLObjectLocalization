@@ -490,6 +490,11 @@ class HierarchicalZoomEnv(ObjectLocalizationEnv):
             bbox[1] = bbox[1] + a_h
             bbox[2] = bbox[2] - a_w
             bbox[3] = bbox[3] - a_h
+        elif action[4]:
+            bbox[0] = bbox[0] + (a_w / 2)
+            bbox[1] = bbox[1] + (a_h / 2)
+            bbox[2] = bbox[2] - a_w
+            bbox[3] = bbox[3] - a_h 
 
         bbox = self._sanitize_bbox(bbox)
         return bbox
@@ -540,11 +545,16 @@ class StretchyZoomEnv(ObjectLocalizationEnv):
             bbox[2] = bbox[2] - a_w
             bbox[3] = bbox[3] - a_h
         elif action[4]:
-            bbox[0] = bbox[0] - a_w
-            bbox[2] = bbox[2] + a_w * 2
+            bbox[0] = bbox[0] + (a_w / 2)
+            bbox[1] = bbox[1] + (a_h / 2)
+            bbox[2] = bbox[2] - a_w
+            bbox[3] = bbox[3] - a_h
         elif action[5]:
-            bbox[1] = bbox[1] - a_h
-            bbox[3] = bbox[3] + a_h * 2
+            bbox[1] = bbox[1] + a_h
+            bbox[3] = bbox[3] - a_h * 2
+        elif action[6]:
+            bbox[0] = bbox[0] + a_w
+            bbox[2] = bbox[2] - a_w * 2
 
         bbox = self._sanitize_bbox(bbox)
         return bbox
