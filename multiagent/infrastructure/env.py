@@ -39,7 +39,6 @@ class ObjectLocalizationEnv():
 
         self.actions = np.identity(9)
 
-
         self.target_bboxs = []
         self.orig_target_bboxs = None
         self.found_bboxs = []
@@ -53,19 +52,6 @@ class ObjectLocalizationEnv():
     def get_reward(self, old_bbox, action, new_bbox):
         """Returns reward, {-1,+1} for non-trigger actions, {-trigger_reward, +trigger_reward} for trigger action"""
         return tf.reshape(tf.cast(self._reward(old_bbox, action, new_bbox), tf.float32), (1,))
-        
-
-    def _get_max_iou(self, bbox):
-        max_bbox_index = None
-        max_iou = -np.inf
-
-        for ind, target_bbox in enumerate(self.target_bboxs):
-            iou = get_iou(bbox, target_bbox)
-            if iou > max_iou:
-                max_bbox_index = ind
-                max_iou = iou
-        
-        return max_iou, max_bbox_index
 
     def _reward(self, old_bbox, action, new_bbox):
         """Reward function"""
@@ -86,8 +72,18 @@ class ObjectLocalizationEnv():
 
         self.target_bbox_ind_to_pop = max_bbox_index
         return ret
-    
-    #TODO: Limit environment to 40 steps, then reset to next location, with a maximum of 200 steps. 
+
+    def _get_max_iou(self, bbox):
+        max_bbox_index = None
+        max_iou = -np.inf
+        for ind, target_bbox in enumerate(self.target_bboxs):
+            iou = get_iou(bbox, target_bbox)
+            if iou > max_iou:
+                max_bbox_index = ind
+                max_iou = iou
+        
+        return max_iou, max_bbox_index
+
     def step(self, action):
         """
         Takes one step through the environment. Returns next_state, reward, and if the episode has terminated
@@ -102,6 +98,8 @@ class ObjectLocalizationEnv():
             6:fatter, 
             7:taller, 
             8:trigger]
+
+        TODO: Limit environment to 40 steps, then reset to next location, with a maximum of 200 steps. 
         """
         if len(action.shape) == 2:
             action = action[0]
@@ -141,26 +139,10 @@ class ObjectLocalizationEnv():
         
         return obs, rew, done
 
-    def training_reset(self):
-        self.target_bboxs = [deepcopy(bbox) for bbox in self.orig_target_bboxs]
-        self.image = tf.identity(self.orig_image)
-        self.found_bboxs = []
-        self.next_reset_location = RotationEnum.START
-        self.reset() #use regular reset afterwards
-
-    #TODO: Allow for multiple target_bboxs's to be used, instead of only one.
-    def reset(self, target_bboxs = None, image = None):
+    def training_reset(self, target_bboxs = None, image = None):
         """
-        
-        Resets the env. Resets bbox to entire image.
-        
-        If not in training mode:
-
-            Reset resizes obs_bbox to 75% of the original size (not full image)
-            placed in one of the following locations, in order: TL, TR, BL, BR
-
+        Resets everything about an environment, including found bboxs, IoR marks, and history
         """
-        #TODO: If target_bboxs is None:
         if target_bboxs is not None:
             if type(target_bboxs) == list:
                 self.target_bboxs = target_bboxs
@@ -172,10 +154,25 @@ class ObjectLocalizationEnv():
             self.image = image
             self.orig_image = tf.identity(image)
             self.found_bboxs = []
-            
-        self.history = tf.zeros([self.history_len, len(self.actions)], dtype=tf.dtypes.float32)
-        _, self.max_h, self.max_w, _ = self.image.shape
+            _, self.max_h, self.max_w, _ = image.shape
 
+        self.found_bboxs = []
+        self.next_reset_location = RotationEnum.START
+
+        self.reset() #use regular reset afterwards
+
+    #TODO: Allow for multiple target_bboxs's to be used, instead of only one.
+    def reset(self, target_bboxs = None, image = None):
+        """
+        Resets the env by setting initial bbox and erasing history
+        
+        If not in training mode:
+
+            Reset resizes obs_bbox to 75% of the original size (not full image)
+            placed in one of the following locations, in order: TL, TR, BL, BR
+
+        """
+        self.history = tf.zeros([self.history_len, len(self.actions)], dtype=tf.dtypes.float32)
 
         if self.next_reset_location == RotationEnum.START:
             self.obs_bbox = [0, 0, self.max_w, self.max_h] 
