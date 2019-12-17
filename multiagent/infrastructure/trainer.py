@@ -27,6 +27,8 @@ class RL_Trainer(object):
         self.max_path_length = self.params["max_path_length"]
 
         self.learning_freq = self.params['learning_freq']
+        self.save_freq = self.params['save_freq']
+        self.model_name = self.params['model_name']
 
         #############
         ## AGENT
@@ -95,5 +97,9 @@ class RL_Trainer(object):
                 loss = self.agent.train()
                 losses.append(loss)
                 print("LOSS:  \t", loss.numpy())
+        
+            if i % self.save_freq == 0 and i and self.save_freq:
+                print("SAVING MODEL")
+                self.agent.q_func.save("models/{}_iter{}".format(self.model_name, i))
 
         return returns, losses
