@@ -38,6 +38,8 @@ class RL_Trainer(object):
 
     def run_training_loop(self, n_iter):
         """
+        Returns (returns, losses) of training n_iter times
+
         :param n_iter:  number of iterations
 
         # Pseudocode
@@ -62,7 +64,7 @@ class RL_Trainer(object):
         losses = []
 
         for i in range(n_iter):
-            print("\n\n********** Iteration %i ************"%i)
+            print("********** Iteration %i ************"%i)
 
             self.env.training_reset()
             rollouts = []
@@ -98,8 +100,9 @@ class RL_Trainer(object):
                 losses.append(loss)
                 print("LOSS:  \t", loss.numpy())
         
-            if i % self.save_freq == 0 and i and self.save_freq:
+            if self.save_freq and i % self.save_freq == 0 and i:
                 print("SAVING MODEL")
                 self.agent.q_func.save("models/{}_iter{}".format(self.model_name, i))
 
         return returns, losses
+

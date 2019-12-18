@@ -91,3 +91,19 @@ class LinearSchedule(object):
         """Returns epsilon value based on t"""
         fraction  = min(float(t) / self.schedule_timesteps, 1.0)
         return self.initial_p + fraction * (self.final_p - self.initial_p)
+
+class EpochSchedule():
+    def __init__(self, total_epochs, final_p, initial_p=1.0):
+        self.epochs_til_final = total_epochs
+        self.final_p = final_p
+        self.initial_p = initial_p
+        self.current_epoch = 0
+        
+    def value(self, t):
+        fraction  = min(float(self.current_epoch) / self.epochs_til_final, 1.0)
+        return self.initial_p + fraction * (self.final_p - self.initial_p)
+    
+    def increment_epoch(self):
+        self.current_epoch += 1
+        if self.current_epoch > self.epochs_til_final:
+            self.current_epoch = self.epochs_til_final
