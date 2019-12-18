@@ -70,10 +70,10 @@ class ObjectLocalizationEnv():
         new_iou, max_bbox_index = self._get_max_iou(new_bbox)
         if new_iou > self.trigger_threshold:
             ret = self.trigger_reward
+            self.target_bbox_ind_to_pop = max_bbox_index
         else:
             ret = -self.trigger_reward
 
-        self.target_bbox_ind_to_pop = max_bbox_index
         return ret
 
     def _get_max_iou(self, bbox):
@@ -113,7 +113,7 @@ class ObjectLocalizationEnv():
         
         if action[len(self.actions) - 1] == 1:
             if self.orig_target_bboxs is not None: #In training mode
-                if self.target_bbox_ind_to_pop:
+                if self.target_bbox_ind_to_pop is not None:
                     self.target_bboxs.pop(self.target_bbox_ind_to_pop) 
                     self.target_bbox_ind_to_pop = None
                 if len(self.target_bboxs) == 0:
@@ -198,7 +198,7 @@ class ObjectLocalizationEnv():
         # Draw target bbox in green
         if self.orig_target_bboxs:
             for bbox in self.orig_target_bboxs:
-                image = draw_bbox(image, bbox, fill="green")
+                image = draw_bbox(image, bbox, fill="orange")
         return image
     
     def get_ac_dim(self):
@@ -212,7 +212,7 @@ class ObjectLocalizationEnv():
         padded_bbox = self._sanitize_bbox([x_offset, y_offset, w_offset, h_offset])
         image = tf.image.crop_to_bounding_box(
             self.image, padded_bbox[1], padded_bbox[0], padded_bbox[3], padded_bbox[2])
-        image = preprocess_input(tf.image.resize(image, self.model_input_dim), mode="tf")
+        image = preprocess_input(tf.image.resize(image, self.model_input_dim))
         self.obs_feature = tf.reshape(self.model(image), (self.feature_dim, ))
         return self.obs_feature
 
