@@ -1,4 +1,4 @@
-# Multiagent Object Localization
+# Moving Edge Deep Reinforcement Learning Object Localization
 
 ## Setup
 
